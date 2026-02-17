@@ -61,20 +61,34 @@ export async function GET() {
     orderBy: { recordedAt: "desc" },
   });
 
-  // Personal records (heaviest single set for each lift the user has done)
-  const personalRecords = await prisma.sessionSet.findMany({
+  // Personal records: get max weight per lift (bounded query)
+  const prAggregates = await prisma.sessionSet.groupBy({
+    by: ["liftId"],
     where: {
       session: { userId, finishedAt: { not: null } },
     },
-    include: { lift: true, session: true },
-    orderBy: { weight: "desc" },
+    _max: { weight: true },
   });
 
-  // Get top 3 personal records (heaviest unique lifts)
-  const prMap = new Map<string, { liftName: string; weight: number; reps: number; date: string }>();
-  for (const set of personalRecords) {
-    if (!prMap.has(set.liftId)) {
-      prMap.set(set.liftId, {
+  // Sort by max weight descending, take top 3
+  const topPRAggregates = prAggregates
+    .filter((pr) => pr._max.weight !== null)
+    .sort((a, b) => Number(b._max.weight) - Number(a._max.weight))
+    .slice(0, 3);
+
+  // Fetch the actual set details for just those top 3 lifts
+  const topPRs: Array<{ liftName: string; weight: number; reps: number; date: string }> = [];
+  for (const pr of topPRAggregates) {
+    const set = await prisma.sessionSet.findFirst({
+      where: {
+        liftId: pr.liftId,
+        weight: pr._max.weight!,
+        session: { userId, finishedAt: { not: null } },
+      },
+      include: { lift: true, session: true },
+    });
+    if (set) {
+      topPRs.push({
         liftName: set.lift.name,
         weight: Number(set.weight),
         reps: set.reps,
@@ -82,9 +96,6 @@ export async function GET() {
       });
     }
   }
-  const topPRs = Array.from(prMap.values())
-    .sort((a, b) => b.weight - a.weight)
-    .slice(0, 3);
 
   // Check for active session
   const activeSession = await prisma.session.findFirst({

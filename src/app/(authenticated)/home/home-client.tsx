@@ -39,12 +39,8 @@ interface DashboardData {
 
 export default function HomeClient({
   userName,
-  activeSessionId,
-  activeSessionWorkoutName,
 }: {
   userName: string;
-  activeSessionId: string | null;
-  activeSessionWorkoutName: string | null;
 }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +48,10 @@ export default function HomeClient({
 
   useEffect(() => {
     fetch("/api/dashboard")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load");
+        return r.json();
+      })
       .then((d) => {
         setData(d);
         setLoading(false);
@@ -106,12 +105,10 @@ export default function HomeClient({
       </div>
 
       {/* Active Session Banner */}
-      {(activeSessionId || data.activeSession) && (
+      {data.activeSession && (
         <button
           onClick={() =>
-            router.push(
-              `/session/${activeSessionId || data.activeSession!.id}`
-            )
+            router.push(`/session/${data.activeSession!.id}`)
           }
           className="w-full p-4 bg-success/15 border border-success/30 rounded-xl text-left transition-colors hover:bg-success/20"
         >
@@ -121,9 +118,7 @@ export default function HomeClient({
                 Active Session
               </p>
               <p className="text-lg font-bold mt-0.5">
-                {activeSessionWorkoutName ||
-                  data.activeSession?.workoutName ||
-                  "Workout"}
+                {data.activeSession.workoutName}
               </p>
             </div>
             <div className="text-success text-2xl">&#8250;</div>
@@ -167,16 +162,8 @@ export default function HomeClient({
                 </p>
               </div>
               {data.bodyWeight.change !== null && (
-                <div
-                  className={`text-right ${
-                    data.bodyWeight.change < 0
-                      ? "text-success"
-                      : data.bodyWeight.change > 0
-                      ? "text-danger"
-                      : "text-muted"
-                  }`}
-                >
-                  <p className="text-sm">7-day change</p>
+                <div className="text-right text-foreground">
+                  <p className="text-sm text-muted">7-day change</p>
                   <p className="text-lg font-semibold">
                     {data.bodyWeight.change > 0 ? "+" : ""}
                     {data.bodyWeight.change.toFixed(1)} lbs

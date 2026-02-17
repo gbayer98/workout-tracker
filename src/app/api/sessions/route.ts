@@ -18,6 +18,18 @@ export async function POST(request: Request) {
     );
   }
 
+  // Verify the workout belongs to this user
+  const workout = await prisma.workout.findUnique({
+    where: { id: workoutId },
+  });
+
+  if (!workout || workout.userId !== session.user.id) {
+    return NextResponse.json(
+      { error: "Workout not found" },
+      { status: 404 }
+    );
+  }
+
   // Check no active session exists
   const activeSession = await prisma.session.findFirst({
     where: { userId: session.user.id, finishedAt: null },

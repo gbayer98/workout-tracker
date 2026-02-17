@@ -31,11 +31,11 @@ export default async function SessionPage({
   });
 
   if (!workoutSession || workoutSession.userId !== session.user.id) {
-    redirect("/workouts");
+    redirect("/home");
   }
 
   if (workoutSession.finishedAt) {
-    redirect("/workouts");
+    redirect("/home");
   }
 
   // Get last recorded values for each lift

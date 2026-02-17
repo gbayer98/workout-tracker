@@ -42,14 +42,16 @@ src/
 ├── app/
 │   ├── layout.tsx          # Root layout (fonts, theme, auth provider)
 │   ├── globals.css         # Tailwind v4 theme with CSS variables
-│   ├── page.tsx            # Redirects to /lifts or /login
+│   ├── page.tsx            # Redirects to /home or /login
 │   ├── login/page.tsx      # Username + password login
+│   ├── home/               # Dashboard: stats, PRs, recent activity
 │   ├── lifts/              # Lift browsing, creation, history charts
 │   ├── workouts/           # Workout CRUD, start session
 │   ├── session/            # Active session data entry
 │   ├── weight/             # Body weight tracker + chart
 │   └── api/                # API routes organized by entity
 │       ├── auth/[...nextauth]/route.ts
+│       ├── dashboard/
 │       ├── lifts/
 │       ├── workouts/
 │       ├── sessions/
@@ -83,7 +85,7 @@ src/
 - Large tap targets (min 44px) for sweaty/gloved hands
 - Use Tailwind v4 `@theme inline` for custom colors in `globals.css`
 - For chart components: use inline styles with pixel values (not percentage heights in flex containers — known Tailwind/hydration issue)
-- Bottom tab navigation (3 tabs: Lifts, Workouts, Weight)
+- Bottom tab navigation (4 tabs: Home, Lifts, Workouts, Weight)
 
 ### API Routes
 - Organize by entity: `/api/lifts`, `/api/workouts`, `/api/sessions`, `/api/weight`

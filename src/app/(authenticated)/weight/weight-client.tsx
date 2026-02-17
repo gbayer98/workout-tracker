@@ -94,6 +94,7 @@ export default function WeightClient({
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
+              max={new Date().toISOString().split("T")[0]}
               className="w-full px-3 py-3 rounded-lg bg-input-bg border border-input-border text-foreground focus:outline-none focus:border-primary"
             />
           </div>

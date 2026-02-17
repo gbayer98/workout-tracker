@@ -63,7 +63,29 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  await prisma.workout.delete({ where: { id } });
+  // Check for sessions referencing this workout
+  const sessionCount = await prisma.session.count({
+    where: { workoutId: id },
+  });
+
+  if (sessionCount > 0) {
+    // Delete associated session data first, then the workout
+    await prisma.$transaction(async (tx) => {
+      // Delete session sets for all sessions of this workout
+      await tx.sessionSet.deleteMany({
+        where: { session: { workoutId: id } },
+      });
+      // Delete sessions
+      await tx.session.deleteMany({
+        where: { workoutId: id },
+      });
+      // Delete workout lifts and workout
+      await tx.workoutLift.deleteMany({ where: { workoutId: id } });
+      await tx.workout.delete({ where: { id } });
+    });
+  } else {
+    await prisma.workout.delete({ where: { id } });
+  }
 
   return NextResponse.json({ success: true });
 }

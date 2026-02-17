@@ -77,7 +77,7 @@ export default function SessionClient({
   useEffect(() => {
     const startTime = new Date(session.startedAt).getTime();
     const interval = setInterval(() => {
-      const diff = Date.now() - startTime;
+      const diff = Math.max(0, Date.now() - startTime);
       const minutes = Math.floor(diff / 60000);
       const seconds = Math.floor((diff % 60000) / 1000);
       setElapsed(
@@ -127,15 +127,14 @@ export default function SessionClient({
       const liftSets = [...(updated[liftId] || [])];
       if (liftSets.length <= 1) return prev;
       liftSets.splice(setIndex, 1);
-      // Re-number sets
-      liftSets.forEach((s, i) => (s.setNumber = i + 1));
-      updated[liftId] = liftSets;
+      // Re-number sets (create new objects to avoid state mutation)
+      const renumbered = liftSets.map((s, i) => ({ ...s, setNumber: i + 1 }));
+      updated[liftId] = renumbered;
       return updated;
     });
   }
 
   async function handleFinish() {
-    setSaving(true);
     const allSets: SetEntry[] = [];
     for (const liftSets of Object.values(sets)) {
       for (const set of liftSets) {
@@ -145,19 +144,43 @@ export default function SessionClient({
       }
     }
 
-    await fetch(`/api/sessions/${session.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sets: allSets, finish: true }),
-    });
+    if (allSets.length === 0) {
+      if (!confirm("You haven't logged any sets. Finish anyway?")) return;
+    }
 
-    router.push("/workouts");
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sets: allSets, finish: true }),
+      });
+
+      if (!res.ok) {
+        alert("Failed to save workout. Please try again.");
+        setSaving(false);
+        return;
+      }
+
+      router.push("/home");
+    } catch {
+      alert("Network error. Please check your connection and try again.");
+      setSaving(false);
+    }
   }
 
   async function handleCancel() {
     if (!confirm("Cancel this workout? All data will be lost.")) return;
-    await fetch(`/api/sessions/${session.id}`, { method: "DELETE" });
-    router.push("/workouts");
+    try {
+      const res = await fetch(`/api/sessions/${session.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        alert("Failed to cancel workout. Please try again.");
+        return;
+      }
+      router.push("/home");
+    } catch {
+      alert("Network error. Please check your connection and try again.");
+    }
   }
 
   return (
@@ -231,7 +254,7 @@ export default function SessionClient({
                     />
                     <button
                       onClick={() => removeSet(wl.liftId, i)}
-                      className="text-muted hover:text-danger text-sm transition-colors"
+                      className="flex items-center justify-center w-10 h-10 text-muted hover:text-danger text-sm rounded transition-colors"
                       title="Remove set"
                     >
                       ✕

@@ -16,7 +16,7 @@ export async function GET(
   const sets = await prisma.sessionSet.findMany({
     where: {
       liftId: id,
-      session: { userId: session.user.id },
+      session: { userId: session.user.id, finishedAt: { not: null } },
     },
     include: { session: true },
     orderBy: { session: { startedAt: "asc" } },

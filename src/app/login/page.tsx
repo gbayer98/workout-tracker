@@ -27,7 +27,7 @@ export default function LoginPage() {
     if (result?.error) {
       setError("Invalid username or password");
     } else {
-      router.push("/lifts");
+      router.push("/home");
     }
   }
 
