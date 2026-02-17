@@ -16,12 +16,17 @@ export async function GET() {
   sevenDaysAgo.setDate(now.getDate() - 7);
   sevenDaysAgo.setHours(0, 0, 0, 0);
 
-  // Recent sessions (last 7 days) with workout name and set count
-  const recentSessions = await prisma.session.findMany({
+  // Last 14 days range (for week-over-week comparison)
+  const fourteenDaysAgo = new Date(now);
+  fourteenDaysAgo.setDate(now.getDate() - 14);
+  fourteenDaysAgo.setHours(0, 0, 0, 0);
+
+  // Recent sessions (last 14 days) for both current and previous week stats
+  const twoWeekSessions = await prisma.session.findMany({
     where: {
       userId,
       finishedAt: { not: null },
-      startedAt: { gte: sevenDaysAgo },
+      startedAt: { gte: fourteenDaysAgo },
     },
     include: {
       workout: true,
@@ -30,7 +35,14 @@ export async function GET() {
     orderBy: { startedAt: "desc" },
   });
 
-  // All finished sessions for streak calculation
+  const recentSessions = twoWeekSessions.filter(
+    (s) => s.startedAt >= sevenDaysAgo
+  );
+  const prevWeekSessions = twoWeekSessions.filter(
+    (s) => s.startedAt < sevenDaysAgo
+  );
+
+  // All finished sessions for streak + consistency
   const allSessions = await prisma.session.findMany({
     where: {
       userId,
@@ -40,28 +52,27 @@ export async function GET() {
     select: { startedAt: true },
   });
 
-  // Calculate current workout streak (consecutive weeks with at least one workout)
+  // Streak
   const weekStreak = calculateWeekStreak(allSessions.map((s) => s.startedAt));
 
-  // Total workouts this week (Mon-Sun of current week)
+  // Total workouts this week
   const thisWeekStart = getWeekStart(now);
   const workoutsThisWeek = allSessions.filter(
     (s) => s.startedAt >= thisWeekStart
   ).length;
 
-  // Latest body weight entry
+  // Body weight
   const latestWeight = await prisma.bodyWeight.findFirst({
     where: { userId },
     orderBy: { recordedAt: "desc" },
   });
 
-  // Body weight change (latest vs 7 days ago)
   const prevWeight = await prisma.bodyWeight.findFirst({
     where: { userId, recordedAt: { lt: sevenDaysAgo } },
     orderBy: { recordedAt: "desc" },
   });
 
-  // Personal records: get max weight per lift (bounded query)
+  // Personal records: bounded query
   const prAggregates = await prisma.sessionSet.groupBy({
     by: ["liftId"],
     where: {
@@ -70,13 +81,11 @@ export async function GET() {
     _max: { weight: true },
   });
 
-  // Sort by max weight descending, take top 3
   const topPRAggregates = prAggregates
     .filter((pr) => pr._max.weight !== null)
     .sort((a, b) => Number(b._max.weight) - Number(a._max.weight))
     .slice(0, 3);
 
-  // Fetch the actual set details for just those top 3 lifts
   const topPRs: Array<{ liftName: string; weight: number; reps: number; date: string }> = [];
   for (const pr of topPRAggregates) {
     const set = await prisma.sessionSet.findFirst({
@@ -97,13 +106,13 @@ export async function GET() {
     }
   }
 
-  // Check for active session
+  // Active session
   const activeSession = await prisma.session.findFirst({
     where: { userId, finishedAt: null },
     include: { workout: true },
   });
 
-  // Total sets and total volume (weight * reps) in last 7 days
+  // This week stats
   let totalSets = 0;
   let totalVolume = 0;
   for (const s of recentSessions) {
@@ -111,6 +120,40 @@ export async function GET() {
     for (const set of s.sessionSets) {
       totalVolume += Number(set.weight) * set.reps;
     }
+  }
+
+  // Last week stats (for comparison)
+  let prevSets = 0;
+  let prevVolume = 0;
+  for (const s of prevWeekSessions) {
+    prevSets += s.sessionSets.length;
+    for (const set of s.sessionSets) {
+      prevVolume += Number(set.weight) * set.reps;
+    }
+  }
+
+  // --- Feature 2: Quick Repeat Last Workout ---
+  const lastFinishedSession = await prisma.session.findFirst({
+    where: { userId, finishedAt: { not: null } },
+    orderBy: { startedAt: "desc" },
+    include: { workout: true },
+  });
+
+  // --- Feature 3: Consistency graph (last 8 weeks) ---
+  const consistencyWeeks: Array<{ weekLabel: string; workouts: number }> = [];
+
+  for (let i = 7; i >= 0; i--) {
+    const weekStart = new Date(thisWeekStart);
+    weekStart.setDate(weekStart.getDate() - i * 7);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+
+    const count = allSessions.filter(
+      (s) => s.startedAt >= weekStart && s.startedAt < weekEnd
+    ).length;
+
+    const monthDay = `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
+    consistencyWeeks.push({ weekLabel: monthDay, workouts: count });
   }
 
   return NextResponse.json({
@@ -130,6 +173,17 @@ export async function GET() {
       totalSets,
       totalVolume: Math.round(totalVolume),
     },
+    weekComparison: {
+      volumeChange: prevVolume > 0
+        ? Math.round(((totalVolume - prevVolume) / prevVolume) * 100)
+        : totalVolume > 0 ? "new" : null,
+      setsChange: prevSets > 0
+        ? Math.round(((totalSets - prevSets) / prevSets) * 100)
+        : totalSets > 0 ? "new" : null,
+      workoutsThisWeek: recentSessions.length,
+      workoutsLastWeek: prevWeekSessions.length,
+    },
+    consistencyWeeks,
     bodyWeight: latestWeight
       ? {
           current: Number(latestWeight.weight),
@@ -141,6 +195,12 @@ export async function GET() {
     personalRecords: topPRs,
     activeSession: activeSession
       ? { id: activeSession.id, workoutName: activeSession.workout.name }
+      : null,
+    quickRepeat: lastFinishedSession
+      ? {
+          workoutId: lastFinishedSession.workoutId,
+          workoutName: lastFinishedSession.workout.name,
+        }
       : null,
   });
 }
@@ -159,14 +219,12 @@ function calculateWeekStreak(dates: Date[]): number {
   const now = new Date();
   const currentWeekStart = getWeekStart(now);
 
-  // Get unique week start dates
   const weekStarts = new Set<string>();
   for (const date of dates) {
     const ws = getWeekStart(date);
     weekStarts.add(ws.toISOString().split("T")[0]);
   }
 
-  // Check if current week has workouts - if not, start from last week
   const currentWeekKey = currentWeekStart.toISOString().split("T")[0];
   let checkDate = weekStarts.has(currentWeekKey)
     ? new Date(currentWeekStart)

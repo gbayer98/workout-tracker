@@ -86,10 +86,16 @@ export default function WorkoutsClient({
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this workout?")) return;
-    const res = await fetch(`/api/workouts/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      setWorkouts((prev) => prev.filter((w) => w.id !== id));
+    if (!confirm("Delete this workout and all its session history?")) return;
+    try {
+      const res = await fetch(`/api/workouts/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setWorkouts((prev) => prev.filter((w) => w.id !== id));
+      } else {
+        alert("Failed to delete workout. Please try again.");
+      }
+    } catch {
+      alert("Network error. Please check your connection.");
     }
   }
 

@@ -21,6 +21,16 @@ interface DashboardData {
     totalSets: number;
     totalVolume: number;
   };
+  weekComparison: {
+    volumeChange: number | "new" | null;
+    setsChange: number | "new" | null;
+    workoutsThisWeek: number;
+    workoutsLastWeek: number;
+  };
+  consistencyWeeks: Array<{
+    weekLabel: string;
+    workouts: number;
+  }>;
   bodyWeight: {
     current: number;
     change: number | null;
@@ -35,6 +45,10 @@ interface DashboardData {
     id: string;
     workoutName: string;
   } | null;
+  quickRepeat: {
+    workoutId: string;
+    workoutName: string;
+  } | null;
 }
 
 export default function HomeClient({
@@ -44,6 +58,7 @@ export default function HomeClient({
 }) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [startingWorkout, setStartingWorkout] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -60,6 +75,35 @@ export default function HomeClient({
   }, []);
 
   const greeting = getGreeting();
+
+  async function handleQuickRepeat() {
+    if (!data?.quickRepeat || startingWorkout) return;
+    setStartingWorkout(true);
+
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workoutId: data.quickRepeat.workoutId }),
+      });
+
+      if (res.ok) {
+        const session = await res.json();
+        router.push(`/session/${session.id}`);
+      } else if (res.status === 409) {
+        const d = await res.json();
+        if (d.sessionId) router.push(`/session/${d.sessionId}`);
+      } else if (res.status === 404) {
+        setData((prev) => prev ? { ...prev, quickRepeat: null } : prev);
+        setStartingWorkout(false);
+      } else {
+        setStartingWorkout(false);
+      }
+    } catch {
+      alert("Network error. Please check your connection.");
+      setStartingWorkout(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -96,6 +140,13 @@ export default function HomeClient({
     return volume.toString();
   };
 
+  const formatChange = (change: number | "new" | null) => {
+    if (change === null) return null;
+    if (change === "new") return "+new";
+    const sign = change > 0 ? "+" : "";
+    return `${sign}${change}%`;
+  };
+
   return (
     <div className="space-y-5">
       {/* Greeting */}
@@ -107,9 +158,7 @@ export default function HomeClient({
       {/* Active Session Banner */}
       {data.activeSession && (
         <button
-          onClick={() =>
-            router.push(`/session/${data.activeSession!.id}`)
-          }
+          onClick={() => router.push(`/session/${data.activeSession!.id}`)}
           className="w-full p-4 bg-success/15 border border-success/30 rounded-xl text-left transition-colors hover:bg-success/20"
         >
           <div className="flex items-center justify-between">
@@ -122,6 +171,27 @@ export default function HomeClient({
               </p>
             </div>
             <div className="text-success text-2xl">&#8250;</div>
+          </div>
+        </button>
+      )}
+
+      {/* Quick Repeat Last Workout */}
+      {data.quickRepeat && !data.activeSession && (
+        <button
+          onClick={handleQuickRepeat}
+          disabled={startingWorkout}
+          className="w-full p-4 bg-primary/10 border border-primary/30 rounded-xl text-left transition-colors hover:bg-primary/15 disabled:opacity-50"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-primary font-semibold text-sm">
+                Repeat Last Workout
+              </p>
+              <p className="text-lg font-bold mt-0.5">
+                {data.quickRepeat.workoutName}
+              </p>
+            </div>
+            <div className="text-primary text-2xl">&#8250;</div>
           </div>
         </button>
       )}
@@ -142,13 +212,57 @@ export default function HomeClient({
           label="Sets (7d)"
           value={data.stats.totalSets.toString()}
           unit="total"
+          change={formatChange(data.weekComparison.setsChange)}
         />
         <StatCard
           label="Volume (7d)"
           value={formatVolume(data.stats.totalVolume)}
           unit="lbs"
+          change={formatChange(data.weekComparison.volumeChange)}
         />
       </div>
+
+      {/* Consistency Graph */}
+      {data.consistencyWeeks.length > 0 && (
+        <div className="p-4 bg-card rounded-xl border border-card-border">
+          <p className="text-sm font-medium mb-3">8-Week Consistency</p>
+          <div className="flex items-end justify-between gap-1">
+            {data.consistencyWeeks.map((week, i) => {
+              const maxWorkouts = Math.max(
+                ...data.consistencyWeeks.map((w) => w.workouts),
+                1
+              );
+              const heightPercent = (week.workouts / maxWorkouts) * 100;
+              const isCurrentWeek = i === data.consistencyWeeks.length - 1;
+
+              return (
+                <div key={i} className="flex flex-col items-center flex-1">
+                  <div className="w-full flex flex-col items-center" style={{ height: 48 }}>
+                    <div className="flex-1" />
+                    {week.workouts > 0 ? (
+                      <div
+                        className={`w-full rounded-sm ${
+                          isCurrentWeek ? "bg-primary" : "bg-primary/40"
+                        }`}
+                        style={{
+                          height: `${Math.max(heightPercent, 15)}%`,
+                          minHeight: 4,
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-1 rounded-sm bg-card-border" />
+                    )}
+                  </div>
+                  <span className="text-[9px] text-muted mt-1">{week.weekLabel}</span>
+                  <span className="text-[10px] font-medium">
+                    {week.workouts > 0 ? week.workouts : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Body Weight Card */}
       {data.bodyWeight && (
@@ -282,10 +396,12 @@ function StatCard({
   label,
   value,
   unit,
+  change,
 }: {
   label: string;
   value: string;
   unit: string;
+  change?: string | null;
 }) {
   return (
     <div className="p-3 bg-card rounded-xl border border-card-border">
@@ -294,6 +410,19 @@ function StatCard({
         <span className="text-2xl font-bold">{value}</span>
         <span className="text-xs text-muted">{unit}</span>
       </div>
+      {change && (
+        <p
+          className={`text-xs mt-0.5 ${
+            change.startsWith("+")
+              ? "text-success"
+              : change.startsWith("-")
+              ? "text-danger"
+              : "text-muted"
+          }`}
+        >
+          {change} vs last week
+        </p>
+      )}
     </div>
   );
 }
