@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
+  lifts       Lift[]
+  workouts    Workout[]
+  sessions    Session[]
+  bodyWeights BodyWeight[]
+}
+
+model Lift {
+  id          String  @id @default(cuid())
+  name        String
+  muscleGroup String
+  isGlobal    Boolean @default(false)
+  userId      String?
+  user        User?   @relation(fields: [userId], references: [id])
+
+  workoutLifts WorkoutLift[]
+  sessionSets  SessionSet[]
+
+  @@index([userId])
+}
+
+model Workout {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  workoutLifts WorkoutLift[]
+  sessions     Session[]
+
+  @@index([userId])
+}
+
+model WorkoutLift {
+  id        String  @id @default(cuid())
+  workoutId String
+  workout   Workout @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  liftId    String
+  lift      Lift    @relation(fields: [liftId], references: [id])
+  order     Int
+
+  @@index([workoutId])
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  workoutId  String
+  workout    Workout   @relation(fields: [workoutId], references: [id])
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  sessionSets SessionSet[]
+
+  @@index([userId])
+}
+
+model SessionSet {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  liftId    String
+  lift      Lift     @relation(fields: [liftId], references: [id])
+  setNumber Int
+  weight    Decimal
+  reps      Int
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([liftId])
+}
+
+model BodyWeight {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  weight     Decimal
+  recordedAt DateTime @db.Date
+
+  @@unique([userId, recordedAt])
+  @@index([userId])
+}
