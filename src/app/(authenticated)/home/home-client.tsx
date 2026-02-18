@@ -54,6 +54,10 @@ export default function HomeClient({
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [startingWorkout, setStartingWorkout] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSending, setFeedbackSending] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -359,6 +363,87 @@ export default function HomeClient({
           <p className="text-xs font-medium">View Lifts</p>
         </Link>
       </div>
+
+      {/* Feedback */}
+      {!feedbackOpen ? (
+        <button
+          onClick={() => {
+            setFeedbackOpen(true);
+            setFeedbackSent(false);
+            setFeedbackText("");
+          }}
+          className="w-full p-3 bg-card rounded-xl border border-dashed border-card-border text-center hover:border-primary/30 transition-colors"
+        >
+          <p className="text-sm text-muted">
+            &#128172; Have a suggestion or feedback?
+          </p>
+        </button>
+      ) : (
+        <div className="p-4 bg-card rounded-xl border border-card-border">
+          {feedbackSent ? (
+            <div className="text-center py-2">
+              <p className="text-success font-medium">Thanks for your feedback!</p>
+              <p className="text-xs text-muted mt-1">We&apos;ll review it soon.</p>
+              <button
+                onClick={() => setFeedbackOpen(false)}
+                className="mt-3 text-sm text-muted hover:text-foreground"
+              >
+                Close
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-sm font-medium mb-2">
+                Suggest a feature or share feedback
+              </p>
+              <textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder="What would make this app better for you?"
+                maxLength={1000}
+                rows={3}
+                className="w-full px-3 py-2 rounded-lg bg-input-bg border border-input-border text-foreground text-sm resize-none focus:outline-none focus:border-primary"
+              />
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-xs text-muted">
+                  {feedbackText.length}/1000
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setFeedbackOpen(false)}
+                    className="px-3 py-1.5 text-sm text-muted hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!feedbackText.trim()) return;
+                      setFeedbackSending(true);
+                      try {
+                        const res = await fetch("/api/feedback", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ message: feedbackText }),
+                        });
+                        if (res.ok) {
+                          setFeedbackSent(true);
+                        }
+                      } catch {
+                        // silently fail
+                      }
+                      setFeedbackSending(false);
+                    }}
+                    disabled={!feedbackText.trim() || feedbackSending}
+                    className="px-4 py-1.5 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50"
+                  >
+                    {feedbackSending ? "Sending..." : "Send"}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

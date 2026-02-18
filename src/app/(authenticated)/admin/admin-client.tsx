@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+interface FeedbackItem {
+  id: string;
+  message: string;
+  username: string;
+  createdAt: string;
+}
+
 interface AdminData {
   stats: {
     totalUsers: number;
@@ -34,6 +41,8 @@ export default function AdminClient() {
   const [resetTarget, setResetTarget] = useState<string | null>(null);
   const [resetPassword, setResetPassword] = useState("");
   const [resetMsg, setResetMsg] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
+  const [feedbackLoading, setFeedbackLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/admin")
@@ -46,6 +55,17 @@ export default function AdminClient() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    fetch("/api/feedback")
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed");
+        return r.json();
+      })
+      .then((d) => {
+        setFeedback(d);
+        setFeedbackLoading(false);
+      })
+      .catch(() => setFeedbackLoading(false));
   }, []);
 
   async function handleResetPassword(userId: string) {
@@ -231,6 +251,37 @@ export default function AdminClient() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* User Feedback */}
+      <div>
+        <h3 className="font-semibold mb-3">
+          User Feedback ({feedback.length})
+        </h3>
+        {feedbackLoading ? (
+          <p className="text-sm text-muted">Loading feedback...</p>
+        ) : feedback.length === 0 ? (
+          <div className="p-4 bg-card rounded-lg border border-dashed border-card-border text-center">
+            <p className="text-sm text-muted">No feedback yet</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {feedback.map((item) => (
+              <div
+                key={item.id}
+                className="p-3 bg-card rounded-lg border border-card-border"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">{item.username}</span>
+                  <span className="text-xs text-muted">
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-sm text-foreground/80">{item.message}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

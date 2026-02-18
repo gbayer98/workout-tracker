@@ -26,6 +26,7 @@ model User {
   sessions    Session[]
   bodyWeights BodyWeight[]
   movements   Movement[]
+  feedback    Feedback[]
 }
 
 enum LiftType {
@@ -128,6 +129,16 @@ model Movement {
   duration  Int?
   date      DateTime     @db.Date
   createdAt DateTime     @default(now())
+
+  @@index([userId])
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  message   String
+  createdAt DateTime @default(now())
 
   @@index([userId])
 }
