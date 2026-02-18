@@ -120,6 +120,129 @@ export async function PUT(
     }
   });
 
+  if (finish) {
+    const finishedSession = await prisma.session.findUnique({
+      where: { id },
+      include: {
+        workout: true,
+        sessionSets: { include: { lift: true } },
+      },
+    });
+
+    if (finishedSession) {
+      const durationMs =
+        finishedSession.finishedAt!.getTime() - finishedSession.startedAt.getTime();
+      const durationMin = Math.round(durationMs / 60000);
+      const totalSets = finishedSession.sessionSets.length;
+
+      const massMoved = finishedSession.sessionSets.reduce((sum, s) => {
+        if (s.lift.type === "STRENGTH") return sum + Number(s.weight) * s.reps;
+        return sum;
+      }, 0);
+
+      const bodyweightReps = finishedSession.sessionSets.reduce((sum, s) => {
+        if (s.lift.type === "BODYWEIGHT") return sum + s.reps;
+        return sum;
+      }, 0);
+
+      // Check leaderboard positions
+      const leaderboardPositions: Array<{
+        category: string;
+        position: number;
+        value: string;
+      }> = [];
+
+      const categories = await prisma.leaderboardCategory.findMany();
+      for (const cat of categories) {
+        if (cat.liftName === "Bench Press" || cat.liftName === "Squat") {
+          const lift = await prisma.lift.findFirst({
+            where: { name: cat.liftName, isGlobal: true },
+          });
+          if (!lift) continue;
+
+          const qualifyingSet = finishedSession.sessionSets
+            .filter((s) => s.liftId === lift.id && s.reps >= 3)
+            .sort((a, b) => Number(b.weight) - Number(a.weight))[0];
+          if (!qualifyingSet) continue;
+
+          const allSets = await prisma.sessionSet.findMany({
+            where: {
+              liftId: lift.id,
+              reps: { gte: 3 },
+              session: { finishedAt: { not: null } },
+            },
+            include: { session: true },
+          });
+
+          const userBest: Record<string, number> = {};
+          for (const s of allSets) {
+            const w = Number(s.weight);
+            if (!userBest[s.session.userId] || w > userBest[s.session.userId]) {
+              userBest[s.session.userId] = w;
+            }
+          }
+
+          const sorted = Object.entries(userBest).sort((a, b) => b[1] - a[1]);
+          const pos = sorted.findIndex(([uid]) => uid === session.user!.id) + 1;
+          if (pos > 0 && pos <= 3) {
+            leaderboardPositions.push({
+              category: cat.name,
+              position: pos,
+              value: `${Number(qualifyingSet.weight)} lbs`,
+            });
+          }
+        } else if (cat.liftName === "Push-Up") {
+          const lift = await prisma.lift.findFirst({
+            where: { name: "Push-Up", isGlobal: true },
+          });
+          if (!lift) continue;
+
+          const bestPushUp = finishedSession.sessionSets
+            .filter((s) => s.liftId === lift.id)
+            .sort((a, b) => b.reps - a.reps)[0];
+          if (!bestPushUp) continue;
+
+          const allSets = await prisma.sessionSet.findMany({
+            where: {
+              liftId: lift.id,
+              session: { finishedAt: { not: null } },
+            },
+            include: { session: true },
+          });
+
+          const userBest: Record<string, number> = {};
+          for (const s of allSets) {
+            if (!userBest[s.session.userId] || s.reps > userBest[s.session.userId]) {
+              userBest[s.session.userId] = s.reps;
+            }
+          }
+
+          const sorted = Object.entries(userBest).sort((a, b) => b[1] - a[1]);
+          const pos = sorted.findIndex(([uid]) => uid === session.user!.id) + 1;
+          if (pos > 0 && pos <= 3) {
+            leaderboardPositions.push({
+              category: cat.name,
+              position: pos,
+              value: `${bestPushUp.reps} reps`,
+            });
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        summary: {
+          workoutName: finishedSession.workout.name,
+          durationMin,
+          totalSets,
+          massMoved: Math.round(massMoved),
+          bodyweightReps,
+          leaderboardPositions,
+        },
+      });
+    }
+  }
+
   return NextResponse.json({ success: true });
 }
 

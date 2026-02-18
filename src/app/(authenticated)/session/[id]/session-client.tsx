@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import SanityCheckModal from "@/components/SanityCheckModal";
+import WorkoutCompleteModal from "@/components/WorkoutCompleteModal";
 
 interface Lift {
   id: string;
@@ -98,6 +99,14 @@ export default function SessionClient({
   const [sanityCheck, setSanityCheck] = useState<{
     message: string;
     onConfirm: () => void;
+  } | null>(null);
+  const [completeSummary, setCompleteSummary] = useState<{
+    workoutName: string;
+    durationMin: number;
+    totalSets: number;
+    massMoved: number;
+    bodyweightReps: number;
+    leaderboardPositions: Array<{ category: string; position: number; value: string }>;
   } | null>(null);
 
   // Rest timer state
@@ -362,7 +371,13 @@ export default function SessionClient({
         return;
       }
 
-      router.push("/home");
+      const data = await res.json();
+      if (data.summary) {
+        setSaving(false);
+        setCompleteSummary(data.summary);
+      } else {
+        router.push("/home");
+      }
     } catch {
       alert("Network error. Please check your connection and try again.");
       setSaving(false);
@@ -391,6 +406,13 @@ export default function SessionClient({
 
   return (
     <div>
+      {completeSummary && (
+        <WorkoutCompleteModal
+          summary={completeSummary}
+          onDone={() => router.push("/home")}
+        />
+      )}
+
       {sanityCheck && (
         <SanityCheckModal
           message={sanityCheck.message}
