@@ -32,10 +32,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token.sub) {
         const user = await prisma.user.findUnique({
           where: { id: token.sub },
-          select: { id: true },
+          select: { id: true, role: true },
         });
         if (!user) {
           return { ...token, sub: undefined };
+        }
+        token.role = user.role;
+
+        // Update lastActiveAt (throttled: once per 5 minutes via token timestamp)
+        const lastUpdate = (token.lastActiveUpdate as number) || 0;
+        if (Date.now() - lastUpdate > 5 * 60 * 1000) {
+          await prisma.user.update({
+            where: { id: token.sub },
+            data: { lastActiveAt: new Date() },
+          }).catch(() => {}); // fire-and-forget
+          token.lastActiveUpdate = Date.now();
         }
       }
       return token;

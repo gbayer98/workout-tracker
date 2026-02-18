@@ -7,11 +7,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model User {
-  id        String   @id @default(cuid())
-  username  String   @unique
-  password  String
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  username     String   @unique
+  password     String
+  displayName  String?
+  role         UserRole @default(USER)
+  lastActiveAt DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   lifts       Lift[]
   workouts    Workout[]

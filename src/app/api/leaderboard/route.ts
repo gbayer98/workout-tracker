@@ -70,7 +70,7 @@ export async function GET() {
         const weight = Number(s.weight);
         if (!userBest[userId] || weight > userBest[userId].weight) {
           userBest[userId] = {
-            username: s.session.user.username,
+            username: s.session.user.displayName || s.session.user.username,
             weight,
             date: s.session.startedAt.toISOString().split("T")[0],
           };
@@ -129,7 +129,7 @@ export async function GET() {
         const userId = s.session.userId;
         if (!userBest[userId] || s.reps > userBest[userId].reps) {
           userBest[userId] = {
-            username: s.session.user.username,
+            username: s.session.user.displayName || s.session.user.username,
             reps: s.reps,
             date: s.session.startedAt.toISOString().split("T")[0],
           };
@@ -165,7 +165,7 @@ export async function GET() {
       const userCounts: Record<string, { username: string; count: number }> = {};
       for (const s of sessions) {
         if (!userCounts[s.userId]) {
-          userCounts[s.userId] = { username: s.user.username, count: 0 };
+          userCounts[s.userId] = { username: s.user.displayName || s.user.username, count: 0 };
         }
         userCounts[s.userId].count++;
       }
@@ -194,7 +194,7 @@ export async function GET() {
       const userTotals: Record<string, { username: string; total: number }> = {};
       for (const m of movements) {
         if (!userTotals[m.userId]) {
-          userTotals[m.userId] = { username: m.user.username, total: 0 };
+          userTotals[m.userId] = { username: m.user.displayName || m.user.username, total: 0 };
         }
         userTotals[m.userId].total += Number(m.distance);
       }
