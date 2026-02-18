@@ -34,6 +34,12 @@ export async function POST(request: Request) {
   if (!name?.trim()) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
+  if (name.trim().length > 100) {
+    return NextResponse.json(
+      { error: "Workout name must be 100 characters or fewer" },
+      { status: 400 }
+    );
+  }
   if (!liftIds || liftIds.length === 0) {
     return NextResponse.json(
       { error: "Select at least one lift" },

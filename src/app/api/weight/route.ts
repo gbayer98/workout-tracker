@@ -31,14 +31,25 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { weight, date } = body;
 
-  if (!weight || weight <= 0) {
+  if (!weight || weight <= 0 || weight > 1000) {
     return NextResponse.json(
-      { error: "Weight must be a positive number" },
+      { error: "Weight must be between 1 and 1000 lbs" },
       { status: 400 }
     );
   }
 
   const recordedAt = date ? new Date(date + "T00:00:00Z") : new Date(new Date().toISOString().split("T")[0] + "T00:00:00Z");
+
+  // Reject future dates
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  if (recordedAt >= tomorrow) {
+    return NextResponse.json(
+      { error: "Cannot log weight for a future date" },
+      { status: 400 }
+    );
+  }
 
   // Upsert: one entry per day per user
   const entry = await prisma.bodyWeight.upsert({

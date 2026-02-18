@@ -79,6 +79,13 @@ export async function PUT(request: Request) {
       );
     }
 
+    if (newPassword.length > 128) {
+      return NextResponse.json(
+        { error: "Password must be 128 characters or fewer" },
+        { status: 400 }
+      );
+    }
+
     updates.password = await hash(newPassword, 10);
   }
 

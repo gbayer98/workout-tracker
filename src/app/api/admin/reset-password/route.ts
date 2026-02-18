@@ -27,6 +27,21 @@ export async function POST(request: Request) {
     );
   }
 
+  if (newPassword.length > 128) {
+    return NextResponse.json(
+      { error: "Password must be 128 characters or fewer" },
+      { status: 400 }
+    );
+  }
+
+  // Prevent admin from resetting their own password via this endpoint
+  if (userId === session.user.id) {
+    return NextResponse.json(
+      { error: "Use Settings to change your own password" },
+      { status: 400 }
+    );
+  }
+
   const target = await prisma.user.findUnique({ where: { id: userId } });
   if (!target) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });

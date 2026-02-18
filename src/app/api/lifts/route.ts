@@ -27,9 +27,27 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { name, muscleGroup, type } = body;
 
-  if (!name || !muscleGroup) {
+  const trimmedName = name?.trim();
+  const trimmedGroup = muscleGroup?.trim();
+
+  if (!trimmedName || !trimmedGroup) {
     return NextResponse.json(
       { error: "Name and muscle group are required" },
+      { status: 400 }
+    );
+  }
+
+  if (trimmedName.length > 100) {
+    return NextResponse.json(
+      { error: "Lift name must be 100 characters or fewer" },
+      { status: 400 }
+    );
+  }
+
+  const validGroups = ["Arms", "Back", "Chest", "Core", "Legs", "Shoulders"];
+  if (!validGroups.includes(trimmedGroup)) {
+    return NextResponse.json(
+      { error: "Invalid muscle group" },
       { status: 400 }
     );
   }
@@ -39,8 +57,8 @@ export async function POST(request: Request) {
 
   const lift = await prisma.lift.create({
     data: {
-      name,
-      muscleGroup,
+      name: trimmedName,
+      muscleGroup: trimmedGroup,
       type: liftType,
       isGlobal: false,
       userId: session.user.id,

@@ -184,7 +184,7 @@ export default function AdminClient() {
               {resetTarget === user.id ? (
                 <div className="mt-2 flex gap-2">
                   <input
-                    type="text"
+                    type="password"
                     value={resetPassword}
                     onChange={(e) => setResetPassword(e.target.value)}
                     placeholder="New password (8+ chars)"

@@ -542,6 +542,8 @@ export default function SessionClient({
                           }
                           onBlur={() => handleSetBlur(wl.liftId, i)}
                           placeholder="0"
+                          min="0"
+                          max="2000"
                           step="2.5"
                           disabled={isChecked}
                           className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
@@ -557,6 +559,8 @@ export default function SessionClient({
                           }
                           onBlur={() => handleSetBlur(wl.liftId, i)}
                           placeholder="sec"
+                          min="0"
+                          max="86400"
                           disabled={isChecked}
                           className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                           inputMode="numeric"
@@ -570,6 +574,8 @@ export default function SessionClient({
                           }
                           onBlur={() => handleSetBlur(wl.liftId, i)}
                           placeholder="0"
+                          min="0"
+                          max="1000"
                           disabled={isChecked}
                           className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                           inputMode="numeric"

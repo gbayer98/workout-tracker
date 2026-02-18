@@ -11,8 +11,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: {},
       },
       async authorize(credentials) {
-        const user = await prisma.user.findUnique({
-          where: { username: credentials.username as string },
+        if (!credentials?.username || !credentials?.password) return null;
+
+        const trimmed = (credentials.username as string).trim().toLowerCase();
+        if (!trimmed) return null;
+
+        const user = await prisma.user.findFirst({
+          where: { username: { equals: trimmed, mode: "insensitive" } },
         });
         if (!user) return null;
 
@@ -54,6 +59,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (token.sub) {
         session.user.id = token.sub;
+      }
+      if (token.role) {
+        (session.user as unknown as Record<string, unknown>).role = token.role;
       }
       return session;
     },

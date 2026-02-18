@@ -20,6 +20,21 @@ export async function PUT(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  if (!liftIds || liftIds.length === 0) {
+    return NextResponse.json(
+      { error: "Select at least one lift" },
+      { status: 400 }
+    );
+  }
+
+  const trimmedName = name?.trim();
+  if (trimmedName && trimmedName.length > 100) {
+    return NextResponse.json(
+      { error: "Workout name must be 100 characters or fewer" },
+      { status: 400 }
+    );
+  }
+
   // Update workout in a transaction: update name, delete old lifts, create new ones
   const updated = await prisma.$transaction(async (tx) => {
     await tx.workoutLift.deleteMany({ where: { workoutId: id } });
@@ -27,7 +42,7 @@ export async function PUT(
     return tx.workout.update({
       where: { id },
       data: {
-        name: name?.trim() || workout.name,
+        name: trimmedName || workout.name,
         workoutLifts: {
           create: (liftIds || []).map((liftId, index) => ({
             liftId,

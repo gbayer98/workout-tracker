@@ -106,13 +106,48 @@ export async function POST(request: Request) {
     );
   }
 
+  const parsedDistance = parseFloat(distance);
+  if (isNaN(parsedDistance) || parsedDistance <= 0 || parsedDistance > 200) {
+    return NextResponse.json(
+      { error: "Distance must be between 0.01 and 200 miles" },
+      { status: 400 }
+    );
+  }
+
+  const parsedDuration = duration ? parseInt(duration) : null;
+  if (parsedDuration !== null && (isNaN(parsedDuration) || parsedDuration < 0 || parsedDuration > 1440)) {
+    return NextResponse.json(
+      { error: "Duration must be between 0 and 1440 minutes" },
+      { status: 400 }
+    );
+  }
+
+  const movementDate = date ? new Date(date) : new Date();
+  if (isNaN(movementDate.getTime())) {
+    return NextResponse.json(
+      { error: "Invalid date" },
+      { status: 400 }
+    );
+  }
+
+  // Reject future dates
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  if (movementDate >= tomorrow) {
+    return NextResponse.json(
+      { error: "Cannot log movement for a future date" },
+      { status: 400 }
+    );
+  }
+
   const movement = await prisma.movement.create({
     data: {
       userId: session.user.id,
       type,
-      distance: parseFloat(distance),
-      duration: duration ? parseInt(duration) : null,
-      date: date ? new Date(date) : new Date(),
+      distance: parsedDistance,
+      duration: parsedDuration,
+      date: movementDate,
     },
   });
 

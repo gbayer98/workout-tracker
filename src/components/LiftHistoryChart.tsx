@@ -206,7 +206,7 @@ export default function LiftHistoryChart({
               stroke="#3b82f6"
               tick={{ fontSize: 11 }}
               domain={[
-                (dataMin: number) => Math.floor(dataMin - 5),
+                (dataMin: number) => Math.max(0, Math.floor(dataMin - 5)),
                 (dataMax: number) => Math.ceil(dataMax + 5),
               ]}
               label={{

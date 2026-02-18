@@ -21,8 +21,11 @@ interface LeaderboardCategory {
 export default function LeaderboardClient() {
   const [categories, setCategories] = useState<LeaderboardCategory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  function loadLeaderboard() {
+    setLoading(true);
+    setError(false);
     fetch("/api/leaderboard")
       .then((r) => {
         if (!r.ok) throw new Error("Failed");
@@ -32,13 +35,34 @@ export default function LeaderboardClient() {
         setCategories(d);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        setError(true);
+        setLoading(false);
+      });
+  }
+
+  useEffect(() => {
+    loadLeaderboard();
   }, []);
 
   if (loading) {
     return (
       <div className="py-12 text-center">
         <p className="text-muted">Loading leaderboards...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="py-12 text-center">
+        <p className="text-muted">Failed to load leaderboard</p>
+        <button
+          onClick={loadLeaderboard}
+          className="mt-3 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors"
+        >
+          Tap to retry
+        </button>
       </div>
     );
   }
@@ -96,12 +120,12 @@ export default function LeaderboardClient() {
                           : "bg-input-bg"
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg w-8 text-center">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className="text-lg w-8 text-center shrink-0">
                           {medal}
                         </span>
                         <span
-                          className={`font-medium ${
+                          className={`font-medium truncate ${
                             entry.isCurrentUser ? "text-primary" : ""
                           }`}
                         >

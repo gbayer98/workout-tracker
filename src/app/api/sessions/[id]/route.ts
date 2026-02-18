@@ -94,6 +94,38 @@ export async function PUT(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  // Prevent modifications to finished sessions
+  if (workoutSession.finishedAt) {
+    return NextResponse.json(
+      { error: "Session already finished" },
+      { status: 400 }
+    );
+  }
+
+  // Validate set data
+  if (sets && sets.length > 0) {
+    for (const s of sets) {
+      if (s.weight < 0 || s.weight > 2000) {
+        return NextResponse.json(
+          { error: "Weight must be between 0 and 2000 lbs" },
+          { status: 400 }
+        );
+      }
+      if (s.reps < 0 || s.reps > 1000) {
+        return NextResponse.json(
+          { error: "Reps must be between 0 and 1000" },
+          { status: 400 }
+        );
+      }
+      if (s.duration !== undefined && s.duration !== null && (s.duration < 0 || s.duration > 86400)) {
+        return NextResponse.json(
+          { error: "Duration must be between 0 and 86400 seconds" },
+          { status: 400 }
+        );
+      }
+    }
+  }
+
   // Save sets in a transaction
   await prisma.$transaction(async (tx) => {
     // Delete existing sets and re-create (simpler than upsert)
@@ -106,7 +138,7 @@ export async function PUT(
           liftId: s.liftId,
           setNumber: s.setNumber,
           weight: s.weight || 0,
-          reps: s.reps || 0,
+          reps: Math.floor(s.reps) || 0,
           duration: s.duration || null,
         })),
       });
