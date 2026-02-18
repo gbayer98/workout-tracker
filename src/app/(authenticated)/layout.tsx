@@ -9,7 +9,7 @@ export default async function AuthenticatedLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  if (!session) redirect("/login");
+  if (!session?.user?.id) redirect("/login");
 
   return (
     <div className="flex flex-col min-h-screen">

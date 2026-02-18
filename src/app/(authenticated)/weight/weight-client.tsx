@@ -27,6 +27,7 @@ export default function WeightClient({
   const [weight, setWeight] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sanityCheck, setSanityCheck] = useState<{
     message: string;
     onConfirm: () => void;
@@ -47,21 +48,31 @@ export default function WeightClient({
 
   async function doSaveWeight(numWeight: number) {
     setSaving(true);
-    const res = await fetch("/api/weight", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ weight: numWeight, date }),
-    });
-
-    if (res.ok) {
-      const entry = await res.json();
-      setEntries((prev) => {
-        const filtered = prev.filter((e) => e.date !== entry.date);
-        return [...filtered, entry].sort(
-          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
+    setError(null);
+    try {
+      const res = await fetch("/api/weight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weight: numWeight, date }),
       });
-      setWeight("");
+
+      if (res.ok) {
+        const entry = await res.json();
+        setEntries((prev) => {
+          const filtered = prev.filter((e) => e.date !== entry.date);
+          return [...filtered, entry].sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+        });
+        setWeight("");
+      } else if (res.status === 401) {
+        window.location.href = "/login";
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || "Failed to save weight");
+      }
+    } catch {
+      setError("Network error — check your connection");
     }
     setSaving(false);
   }
@@ -106,6 +117,12 @@ export default function WeightClient({
           onConfirm={sanityCheck.onConfirm}
           onCancel={() => setSanityCheck(null)}
         />
+      )}
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          {error}
+        </div>
       )}
 
       <h2 className="text-xl font-bold mb-4">Body Weight</h2>

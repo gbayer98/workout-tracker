@@ -30,6 +30,7 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
   const [newType, setNewType] = useState<"STRENGTH" | "BODYWEIGHT" | "ENDURANCE">("STRENGTH");
   const [creating, setCreating] = useState(false);
   const [selectedLiftId, setSelectedLiftId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [sanityCheck, setSanityCheck] = useState<{
     message: string;
     onConfirm: () => void;
@@ -49,20 +50,30 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
 
   async function doCreateLift() {
     setCreating(true);
-    const res = await fetch("/api/lifts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim(), muscleGroup: newGroup, type: newType }),
-    });
+    setError(null);
+    try {
+      const res = await fetch("/api/lifts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName.trim(), muscleGroup: newGroup, type: newType }),
+      });
 
-    if (res.ok) {
-      const lift = await res.json();
-      setLifts((prev) => [...prev, lift].sort((a, b) => {
-        if (a.muscleGroup !== b.muscleGroup) return a.muscleGroup.localeCompare(b.muscleGroup);
-        return a.name.localeCompare(b.name);
-      }));
-      setNewName("");
-      setShowCreate(false);
+      if (res.ok) {
+        const lift = await res.json();
+        setLifts((prev) => [...prev, lift].sort((a, b) => {
+          if (a.muscleGroup !== b.muscleGroup) return a.muscleGroup.localeCompare(b.muscleGroup);
+          return a.name.localeCompare(b.name);
+        }));
+        setNewName("");
+        setShowCreate(false);
+      } else if (res.status === 401) {
+        window.location.href = "/login";
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || "Failed to create lift");
+      }
+    } catch {
+      setError("Network error — check your connection");
     }
     setCreating(false);
   }
@@ -100,6 +111,12 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
           onConfirm={sanityCheck.onConfirm}
           onCancel={() => setSanityCheck(null)}
         />
+      )}
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          {error}
+        </div>
       )}
 
       <div className="flex items-center justify-between mb-4">

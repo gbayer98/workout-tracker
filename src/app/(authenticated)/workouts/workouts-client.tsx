@@ -35,6 +35,7 @@ export default function WorkoutsClient({
   const [formName, setFormName] = useState("");
   const [selectedLiftIds, setSelectedLiftIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
   function openCreate() {
@@ -63,24 +64,34 @@ export default function WorkoutsClient({
     e.preventDefault();
     if (!formName.trim() || selectedLiftIds.length === 0) return;
     setSaving(true);
+    setError(null);
 
-    const url = editingId ? `/api/workouts/${editingId}` : "/api/workouts";
-    const method = editingId ? "PUT" : "POST";
+    try {
+      const url = editingId ? `/api/workouts/${editingId}` : "/api/workouts";
+      const method = editingId ? "PUT" : "POST";
 
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: formName.trim(), liftIds: selectedLiftIds }),
-    });
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: formName.trim(), liftIds: selectedLiftIds }),
+      });
 
-    if (res.ok) {
-      const workout = await res.json();
-      if (editingId) {
-        setWorkouts((prev) => prev.map((w) => (w.id === editingId ? workout : w)));
+      if (res.ok) {
+        const workout = await res.json();
+        if (editingId) {
+          setWorkouts((prev) => prev.map((w) => (w.id === editingId ? workout : w)));
+        } else {
+          setWorkouts((prev) => [workout, ...prev]);
+        }
+        setShowForm(false);
+      } else if (res.status === 401) {
+        window.location.href = "/login";
       } else {
-        setWorkouts((prev) => [workout, ...prev]);
+        const data = await res.json().catch(() => null);
+        setError(data?.error || "Failed to save workout");
       }
-      setShowForm(false);
+    } catch {
+      setError("Network error — check your connection");
     }
     setSaving(false);
   }
@@ -126,6 +137,12 @@ export default function WorkoutsClient({
 
   return (
     <div>
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">Workouts</h2>
         <button

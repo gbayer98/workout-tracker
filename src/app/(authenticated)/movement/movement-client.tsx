@@ -41,6 +41,7 @@ export default function MovementClient() {
   const [duration, setDuration] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/movement")
@@ -59,26 +60,35 @@ export default function MovementClient() {
     e.preventDefault();
     if (!distance || parseFloat(distance) <= 0) return;
     setSaving(true);
+    setError(null);
 
-    const res = await fetch("/api/movement", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type,
-        distance,
-        duration: duration || null,
-        date,
-      }),
-    });
+    try {
+      const res = await fetch("/api/movement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type,
+          distance,
+          duration: duration || null,
+          date,
+        }),
+      });
 
-    if (res.ok) {
-      setDistance("");
-      setDuration("");
-      // Refetch all data
-      const refreshRes = await fetch("/api/movement");
-      if (refreshRes.ok) {
-        setData(await refreshRes.json());
+      if (res.ok) {
+        setDistance("");
+        setDuration("");
+        const refreshRes = await fetch("/api/movement");
+        if (refreshRes.ok) {
+          setData(await refreshRes.json());
+        }
+      } else if (res.status === 401) {
+        window.location.href = "/login";
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || "Failed to save movement");
       }
+    } catch {
+      setError("Network error — check your connection");
     }
     setSaving(false);
   }
@@ -93,6 +103,12 @@ export default function MovementClient() {
 
   return (
     <div>
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+          {error}
+        </div>
+      )}
+
       <h2 className="text-xl font-bold mb-4">Movement</h2>
 
       {/* Input form */}
