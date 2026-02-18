@@ -107,6 +107,13 @@ async function main() {
         rule: "Number of completed workouts in the current Monday-Sunday week",
         displayOrder: 4,
       },
+      {
+        name: "Total Miles Moved",
+        liftName: null,
+        metric: "All-time distance",
+        rule: "Total miles logged across all runs and walks",
+        displayOrder: 5,
+      },
     ],
   });
 
@@ -314,10 +321,157 @@ async function main() {
 
   console.log(`Created ${movementData.length} movement entries for Jake`);
 
+  // === Kate's data — for leaderboard competition ===
+  const kateUpperBody = await prisma.workout.create({
+    data: {
+      name: "Upper Body",
+      userId: kate.id,
+      workoutLifts: {
+        create: [
+          { liftId: lifts["Bench Press"], order: 0 },
+          { liftId: lifts["Overhead Press"], order: 1 },
+          { liftId: lifts["Push-Up"], order: 2 },
+        ],
+      },
+    },
+  });
+
+  const kateLowerBody = await prisma.workout.create({
+    data: {
+      name: "Lower Body",
+      userId: kate.id,
+      workoutLifts: {
+        create: [
+          { liftId: lifts["Squat"], order: 0 },
+          { liftId: lifts["Leg Press"], order: 1 },
+          { liftId: lifts["Lunges"], order: 2 },
+        ],
+      },
+    },
+  });
+
+  console.log("Created Kate's workouts: Upper Body, Lower Body");
+
+  // Kate's sessions — 3 weeks of data
+  const kateSchedule = [
+    { day: 0, workout: kateUpperBody, liftNames: ["Bench Press", "Overhead Press", "Push-Up"] },
+    { day: 3, workout: kateLowerBody, liftNames: ["Squat", "Leg Press", "Lunges"] },
+  ];
+
+  const kateProgression: Record<string, { weight: number; reps: number }> = {
+    "Bench Press": { weight: 95, reps: 8 },
+    "Overhead Press": { weight: 65, reps: 8 },
+    "Push-Up": { weight: 0, reps: 25 }, // bodyweight
+    "Squat": { weight: 135, reps: 8 },
+    "Leg Press": { weight: 200, reps: 10 },
+    "Lunges": { weight: 30, reps: 10 },
+  };
+
+  let kateSessionCount = 0;
+  const threeWeeksAgo = new Date(now);
+  threeWeeksAgo.setDate(now.getDate() - 21);
+  const kateStartMonday = new Date(threeWeeksAgo);
+  const kateDayOfWeek = kateStartMonday.getDay();
+  kateStartMonday.setDate(kateStartMonday.getDate() - (kateDayOfWeek === 0 ? 6 : kateDayOfWeek - 1));
+
+  for (let week = 0; week < 3; week++) {
+    for (const schedule of kateSchedule) {
+      const sessionDate = new Date(kateStartMonday);
+      sessionDate.setDate(kateStartMonday.getDate() + (week * 7) + schedule.day);
+      sessionDate.setHours(18, 0, 0, 0); // Evening workout
+
+      const finishDate = new Date(sessionDate);
+      finishDate.setMinutes(finishDate.getMinutes() + 40 + Math.floor(Math.random() * 20));
+
+      const kateSession = await prisma.session.create({
+        data: {
+          userId: kate.id,
+          workoutId: schedule.workout.id,
+          startedAt: sessionDate,
+          finishedAt: finishDate,
+        },
+      });
+
+      for (const liftName of schedule.liftNames) {
+        const prog = kateProgression[liftName];
+        const isPushUp = liftName === "Push-Up";
+
+        // Progressive overload for Kate
+        const currentWeight = isPushUp ? 0 : prog.weight + (week * 5);
+        const currentReps = isPushUp ? prog.reps + (week * 3) : prog.reps + week;
+
+        const numSets = isPushUp ? 3 : 4;
+
+        for (let setNum = 1; setNum <= numSets; setNum++) {
+          const setReps = setNum === numSets ? Math.max(currentReps - 2, 3) : currentReps;
+          const setWeight = isPushUp ? 0 : (setNum >= numSets ? currentWeight - 5 : currentWeight);
+
+          await prisma.sessionSet.create({
+            data: {
+              sessionId: kateSession.id,
+              liftId: lifts[liftName],
+              setNumber: setNum,
+              weight: setWeight,
+              reps: setReps,
+            },
+          });
+        }
+      }
+
+      kateSessionCount++;
+    }
+  }
+
+  console.log(`Created ${kateSessionCount} sessions for Kate`);
+
+  // Kate's body weight entries
+  for (let i = 0; i < 8; i++) {
+    const date = new Date(kateStartMonday);
+    date.setDate(kateStartMonday.getDate() + Math.floor(i * 21 / 8));
+    const weight = 140 - (i * 0.2) + (Math.random() - 0.5) * 0.4;
+    await prisma.bodyWeight.create({
+      data: {
+        userId: kate.id,
+        weight: Math.round(weight * 10) / 10,
+        recordedAt: date,
+      },
+    });
+  }
+
+  console.log("Created body weight entries for Kate");
+
+  // Kate's movement data (she runs more)
+  const kateMovement = [
+    { type: "RUN" as const, distance: 4.2, duration: 38, daysAgo: 18 },
+    { type: "RUN" as const, distance: 3.5, duration: 30, daysAgo: 15 },
+    { type: "WALK" as const, distance: 2.5, duration: 42, daysAgo: 12 },
+    { type: "RUN" as const, distance: 5.0, duration: 44, daysAgo: 9 },
+    { type: "RUN" as const, distance: 3.8, duration: 33, daysAgo: 6 },
+    { type: "WALK" as const, distance: 3.0, duration: 50, daysAgo: 4 },
+    { type: "RUN" as const, distance: 4.5, duration: 40, daysAgo: 2 },
+    { type: "RUN" as const, distance: 3.2, duration: 28, daysAgo: 0 },
+  ];
+
+  for (const m of kateMovement) {
+    const mDate = new Date(now);
+    mDate.setDate(now.getDate() - m.daysAgo);
+    await prisma.movement.create({
+      data: {
+        userId: kate.id,
+        type: m.type,
+        distance: m.distance,
+        duration: m.duration,
+        date: mDate,
+      },
+    });
+  }
+
+  console.log(`Created ${kateMovement.length} movement entries for Kate`);
+
   console.log("\nSeed complete!");
   console.log("Test accounts:");
-  console.log("  Jake / temporary123 (has workout data)");
-  console.log("  Kate / temporary123 (fresh account)");
+  console.log("  Jake / temporary123 (has workout data, movement data)");
+  console.log("  Kate / temporary123 (has workout data, movement data)");
 }
 
 main()

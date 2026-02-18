@@ -49,7 +49,6 @@ export async function GET() {
         continue;
       }
 
-      // Find max weight per user where reps >= 3
       const qualifyingSets = await prisma.sessionSet.findMany({
         where: {
           liftId: lift.id,
@@ -62,7 +61,6 @@ export async function GET() {
         orderBy: { weight: "desc" },
       });
 
-      // Group by user, get max
       const userBest: Record<
         string,
         { username: string; weight: number; date: string }
@@ -154,8 +152,8 @@ export async function GET() {
           isCurrentUser: userId === currentUserId,
         })),
       });
-    } else if (!category.liftName) {
-      // Workouts this week
+    } else if (category.name === "Workouts This Week") {
+      // Finished sessions this week
       const sessions = await prisma.session.findMany({
         where: {
           finishedAt: { not: null },
@@ -186,6 +184,44 @@ export async function GET() {
           unit: "workouts",
           isCurrentUser: userId === currentUserId,
         })),
+      });
+    } else if (category.name === "Total Miles Moved") {
+      // All-time total distance from movement entries
+      const movements = await prisma.movement.findMany({
+        include: { user: true },
+      });
+
+      const userTotals: Record<string, { username: string; total: number }> = {};
+      for (const m of movements) {
+        if (!userTotals[m.userId]) {
+          userTotals[m.userId] = { username: m.user.username, total: 0 };
+        }
+        userTotals[m.userId].total += Number(m.distance);
+      }
+
+      const sorted = Object.entries(userTotals)
+        .sort((a, b) => b[1].total - a[1].total);
+
+      results.push({
+        id: category.id,
+        name: category.name,
+        metric: category.metric,
+        rule: category.rule,
+        entries: sorted.map(([userId, data]) => ({
+          username: data.username,
+          value: Math.round(data.total * 10) / 10,
+          unit: "mi",
+          isCurrentUser: userId === currentUserId,
+        })),
+      });
+    } else {
+      // Unknown category — still show it, just empty
+      results.push({
+        id: category.id,
+        name: category.name,
+        metric: category.metric,
+        rule: category.rule,
+        entries: [],
       });
     }
   }

@@ -60,13 +60,21 @@ export default function LeaderboardClient() {
           >
             <div className="mb-3">
               <h3 className="font-semibold text-lg">{cat.name}</h3>
-              <p className="text-xs text-muted mt-0.5">{cat.rule}</p>
+              <p className="text-xs text-muted mt-0.5">{cat.metric}</p>
+              <p className="text-xs text-amber-400/80 mt-1">
+                Qualifies: {cat.rule}
+              </p>
             </div>
 
             {cat.entries.length === 0 ? (
-              <p className="text-sm text-muted py-4 text-center">
-                No qualifying entries yet. Be the first!
-              </p>
+              <div className="py-4 text-center border border-dashed border-card-border rounded-lg">
+                <p className="text-sm text-muted">
+                  No qualifying entries yet
+                </p>
+                <p className="text-xs text-muted mt-1">
+                  Be the first to get on the board!
+                </p>
+              </div>
             ) : (
               <div className="space-y-1.5">
                 {cat.entries.map((entry, i) => {
