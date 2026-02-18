@@ -84,6 +84,7 @@ export async function PUT(
       setNumber: number;
       weight: number;
       reps: number;
+      duration?: number;
     }>;
     finish?: boolean;
   };
@@ -104,8 +105,9 @@ export async function PUT(
           sessionId: id,
           liftId: s.liftId,
           setNumber: s.setNumber,
-          weight: s.weight,
-          reps: s.reps,
+          weight: s.weight || 0,
+          reps: s.reps || 0,
+          duration: s.duration || null,
         })),
       });
     }

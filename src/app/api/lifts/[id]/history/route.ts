@@ -13,6 +13,8 @@ export async function GET(
 
   const { id } = await params;
 
+  const lift = await prisma.lift.findUnique({ where: { id }, select: { type: true } });
+
   const sets = await prisma.sessionSet.findMany({
     where: {
       liftId: id,
@@ -22,20 +24,25 @@ export async function GET(
     orderBy: { session: { startedAt: "asc" } },
   });
 
-  // Aggregate by session date: max weight and max reps per session
-  const bySession = new Map<string, { date: string; weight: number; reps: number }>();
+  // Aggregate by session date based on lift type
+  const bySession = new Map<string, { date: string; weight: number; reps: number; duration: number }>();
 
   for (const set of sets) {
     const dateKey = set.session.startedAt.toISOString().split("T")[0];
     const existing = bySession.get(dateKey);
     const weight = Number(set.weight);
     const reps = set.reps;
+    const duration = set.duration ?? 0;
 
     if (!existing) {
-      bySession.set(dateKey, { date: dateKey, weight, reps });
+      bySession.set(dateKey, { date: dateKey, weight, reps, duration });
     } else {
-      if (weight > existing.weight) existing.weight = weight;
-      if (reps > existing.reps) existing.reps = reps;
+      if (lift?.type === "ENDURANCE") {
+        if (duration > existing.duration) existing.duration = duration;
+      } else {
+        if (weight > existing.weight) existing.weight = weight;
+        if (reps > existing.reps) existing.reps = reps;
+      }
     }
   }
 

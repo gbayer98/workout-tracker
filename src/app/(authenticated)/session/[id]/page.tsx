@@ -64,12 +64,46 @@ export default async function SessionPage({
     }
   }
 
+  // Get the full set breakdown from the last session of the same workout
+  const lastWorkoutSession = await prisma.session.findFirst({
+    where: {
+      userId: session.user.id,
+      workoutId: workoutSession.workoutId,
+      finishedAt: { not: null },
+      id: { not: id },
+    },
+    orderBy: { startedAt: "desc" },
+    include: {
+      sessionSets: {
+        orderBy: [{ liftId: "asc" }, { setNumber: "asc" }],
+      },
+    },
+  });
+
+  // Group last session sets by lift
+  const lastSessionSetsByLift: Record<
+    string,
+    Array<{ weight: number; reps: number; duration: number | null; setNumber: number }>
+  > = {};
+  if (lastWorkoutSession) {
+    for (const s of lastWorkoutSession.sessionSets) {
+      if (!lastSessionSetsByLift[s.liftId]) lastSessionSetsByLift[s.liftId] = [];
+      lastSessionSetsByLift[s.liftId].push({
+        weight: Number(s.weight),
+        reps: s.reps,
+        duration: s.duration,
+        setNumber: s.setNumber,
+      });
+    }
+  }
+
   const serialized = {
     ...workoutSession,
     startedAt: workoutSession.startedAt.toISOString(),
     sessionSets: workoutSession.sessionSets.map((s) => ({
       ...s,
       weight: Number(s.weight),
+      duration: s.duration ?? undefined,
       createdAt: s.createdAt.toISOString(),
     })),
   };
@@ -78,6 +112,7 @@ export default async function SessionPage({
     <SessionClient
       session={serialized}
       lastByLift={lastByLift}
+      lastSessionSets={lastSessionSetsByLift}
     />
   );
 }

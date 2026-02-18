@@ -2,14 +2,22 @@
 
 import { useState } from "react";
 import LiftHistoryChart from "@/components/LiftHistoryChart";
+import SanityCheckModal from "@/components/SanityCheckModal";
 
 interface Lift {
   id: string;
   name: string;
   muscleGroup: string;
+  type: "STRENGTH" | "BODYWEIGHT" | "ENDURANCE";
   isGlobal: boolean;
   userId: string | null;
 }
+
+const LIFT_TYPES = [
+  { value: "STRENGTH", label: "Strength", desc: "Weight + Reps" },
+  { value: "BODYWEIGHT", label: "Bodyweight", desc: "Reps only" },
+  { value: "ENDURANCE", label: "Endurance", desc: "Time" },
+] as const;
 
 const MUSCLE_GROUPS = ["Arms", "Back", "Chest", "Core", "Legs", "Shoulders"];
 
@@ -19,8 +27,13 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newGroup, setNewGroup] = useState("Chest");
+  const [newType, setNewType] = useState<"STRENGTH" | "BODYWEIGHT" | "ENDURANCE">("STRENGTH");
   const [creating, setCreating] = useState(false);
   const [selectedLiftId, setSelectedLiftId] = useState<string | null>(null);
+  const [sanityCheck, setSanityCheck] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const filtered = lifts.filter(
     (l) =>
@@ -34,15 +47,12 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
     return acc;
   }, {});
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newName.trim()) return;
+  async function doCreateLift() {
     setCreating(true);
-
     const res = await fetch("/api/lifts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim(), muscleGroup: newGroup }),
+      body: JSON.stringify({ name: newName.trim(), muscleGroup: newGroup, type: newType }),
     });
 
     if (res.ok) {
@@ -57,8 +67,41 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
     setCreating(false);
   }
 
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newName.trim()) return;
+
+    // Check for similar existing lift names
+    const trimmed = newName.trim().toLowerCase();
+    const match = lifts.find(
+      (l) => l.name.toLowerCase() === trimmed ||
+             l.name.toLowerCase().includes(trimmed) ||
+             trimmed.includes(l.name.toLowerCase())
+    );
+    if (match) {
+      setSanityCheck({
+        message: `There's already a lift called "${match.name}". Want to create "${newName.trim()}" anyway?`,
+        onConfirm: () => {
+          setSanityCheck(null);
+          doCreateLift();
+        },
+      });
+      return;
+    }
+
+    doCreateLift();
+  }
+
   return (
     <div>
+      {sanityCheck && (
+        <SanityCheckModal
+          message={sanityCheck.message}
+          onConfirm={sanityCheck.onConfirm}
+          onCancel={() => setSanityCheck(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">Lifts</h2>
         <button
@@ -93,6 +136,23 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
               </option>
             ))}
           </select>
+          <div className="flex gap-2">
+            {LIFT_TYPES.map((lt) => (
+              <button
+                key={lt.value}
+                type="button"
+                onClick={() => setNewType(lt.value)}
+                className={`flex-1 py-2 px-2 rounded-lg text-sm font-medium border transition-colors ${
+                  newType === lt.value
+                    ? "bg-primary/20 border-primary/40 text-primary"
+                    : "bg-input-bg border-input-border text-muted hover:text-foreground"
+                }`}
+              >
+                <div>{lt.label}</div>
+                <div className="text-xs opacity-70">{lt.desc}</div>
+              </button>
+            ))}
+          </div>
           <div className="flex gap-2">
             <button
               type="submit"
@@ -141,13 +201,20 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
                   }`}
                 >
                   <span className="font-medium">{lift.name}</span>
+                  {lift.type !== "STRENGTH" && (
+                    <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${
+                      lift.type === "BODYWEIGHT" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"
+                    }`}>
+                      {lift.type === "BODYWEIGHT" ? "bodyweight" : "endurance"}
+                    </span>
+                  )}
                   {!lift.isGlobal && (
                     <span className="ml-2 text-xs text-muted">(custom)</span>
                   )}
                 </button>
                 {selectedLiftId === lift.id && (
                   <div className="mt-1 mb-2">
-                    <LiftHistoryChart liftId={lift.id} liftName={lift.name} />
+                    <LiftHistoryChart liftId={lift.id} liftName={lift.name} liftType={lift.type} />
                   </div>
                 )}
               </div>

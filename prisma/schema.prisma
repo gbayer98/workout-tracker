@@ -17,15 +17,23 @@ model User {
   workouts    Workout[]
   sessions    Session[]
   bodyWeights BodyWeight[]
+  movements   Movement[]
+}
+
+enum LiftType {
+  STRENGTH
+  BODYWEIGHT
+  ENDURANCE
 }
 
 model Lift {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   name        String
   muscleGroup String
-  isGlobal    Boolean @default(false)
+  type        LiftType @default(STRENGTH)
+  isGlobal    Boolean  @default(false)
   userId      String?
-  user        User?   @relation(fields: [userId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
 
   workoutLifts WorkoutLift[]
   sessionSets  SessionSet[]
@@ -78,8 +86,9 @@ model SessionSet {
   liftId    String
   lift      Lift     @relation(fields: [liftId], references: [id])
   setNumber Int
-  weight    Decimal
-  reps      Int
+  weight    Decimal  @default(0)
+  reps      Int      @default(0)
+  duration  Int?
   createdAt DateTime @default(now())
 
   @@index([sessionId])
@@ -95,4 +104,31 @@ model BodyWeight {
 
   @@unique([userId, recordedAt])
   @@index([userId])
+}
+
+enum MovementType {
+  RUN
+  WALK
+}
+
+model Movement {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  type      MovementType
+  distance  Decimal
+  duration  Int?
+  date      DateTime     @db.Date
+  createdAt DateTime     @default(now())
+
+  @@index([userId])
+}
+
+model LeaderboardCategory {
+  id           String  @id @default(cuid())
+  name         String
+  liftName     String?
+  metric       String
+  rule         String
+  displayOrder Int
 }

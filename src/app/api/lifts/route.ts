@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { name, muscleGroup } = body;
+  const { name, muscleGroup, type } = body;
 
   if (!name || !muscleGroup) {
     return NextResponse.json(
@@ -34,10 +34,14 @@ export async function POST(request: Request) {
     );
   }
 
+  const validTypes = ["STRENGTH", "BODYWEIGHT", "ENDURANCE"];
+  const liftType = validTypes.includes(type) ? type : "STRENGTH";
+
   const lift = await prisma.lift.create({
     data: {
       name,
       muscleGroup,
+      type: liftType,
       isGlobal: false,
       userId: session.user.id,
     },

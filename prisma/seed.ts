@@ -8,9 +8,11 @@ async function main() {
   await prisma.sessionSet.deleteMany();
   await prisma.session.deleteMany();
   await prisma.bodyWeight.deleteMany();
+  await prisma.movement.deleteMany();
   await prisma.workoutLift.deleteMany();
   await prisma.workout.deleteMany();
   await prisma.lift.deleteMany();
+  await prisma.leaderboardCategory.deleteMany();
   await prisma.user.deleteMany();
 
   console.log("Cleared existing data");
@@ -28,12 +30,13 @@ async function main() {
 
   console.log("Created users: Jake, Kate");
 
-  // Create global lifts
-  const liftData = [
+  // Create global lifts with types
+  const liftData: Array<{ name: string; muscleGroup: string; type?: "STRENGTH" | "BODYWEIGHT" | "ENDURANCE" }> = [
     { name: "Bench Press", muscleGroup: "Chest" },
     { name: "Incline Bench Press", muscleGroup: "Chest" },
     { name: "Cable Fly", muscleGroup: "Chest" },
-    { name: "Dip", muscleGroup: "Chest" },
+    { name: "Dip", muscleGroup: "Chest", type: "BODYWEIGHT" },
+    { name: "Push-Up", muscleGroup: "Chest", type: "BODYWEIGHT" },
     { name: "Overhead Press", muscleGroup: "Shoulders" },
     { name: "Lateral Raise", muscleGroup: "Shoulders" },
     { name: "Face Pull", muscleGroup: "Shoulders" },
@@ -48,23 +51,66 @@ async function main() {
     { name: "Barbell Row", muscleGroup: "Back" },
     { name: "Seated Row", muscleGroup: "Back" },
     { name: "Lat Pulldown", muscleGroup: "Back" },
-    { name: "Pull-Up", muscleGroup: "Back" },
+    { name: "Pull-Up", muscleGroup: "Back", type: "BODYWEIGHT" },
     { name: "Bicep Curl", muscleGroup: "Arms" },
     { name: "Hammer Curl", muscleGroup: "Arms" },
     { name: "Tricep Pushdown", muscleGroup: "Arms" },
     { name: "Skull Crusher", muscleGroup: "Arms" },
-    { name: "Plank", muscleGroup: "Core" },
+    { name: "Plank", muscleGroup: "Core", type: "ENDURANCE" },
+    { name: "Wall Sit", muscleGroup: "Legs", type: "ENDURANCE" },
+    { name: "Dead Hang", muscleGroup: "Back", type: "ENDURANCE" },
   ];
 
   const lifts: Record<string, string> = {};
   for (const lift of liftData) {
     const created = await prisma.lift.create({
-      data: { ...lift, isGlobal: true },
+      data: {
+        name: lift.name,
+        muscleGroup: lift.muscleGroup,
+        type: lift.type || "STRENGTH",
+        isGlobal: true,
+      },
     });
     lifts[lift.name] = created.id;
   }
 
   console.log(`Created ${liftData.length} global lifts`);
+
+  // Create leaderboard categories
+  await prisma.leaderboardCategory.createMany({
+    data: [
+      {
+        name: "Bench Press",
+        liftName: "Bench Press",
+        metric: "Max weight with at least 3 reps",
+        rule: "Heaviest weight where you completed 3 or more reps in a single set",
+        displayOrder: 1,
+      },
+      {
+        name: "Squat",
+        liftName: "Squat",
+        metric: "Max weight with at least 3 reps",
+        rule: "Heaviest weight where you completed 3 or more reps in a single set",
+        displayOrder: 2,
+      },
+      {
+        name: "Push-Ups",
+        liftName: "Push-Up",
+        metric: "Max reps in a single set",
+        rule: "Most push-ups completed in a single set",
+        displayOrder: 3,
+      },
+      {
+        name: "Workouts This Week",
+        liftName: null,
+        metric: "Finished sessions this week",
+        rule: "Number of completed workouts in the current Monday-Sunday week",
+        displayOrder: 4,
+      },
+    ],
+  });
+
+  console.log("Created leaderboard categories");
 
   // Create Jake's workouts
   const pushDay = await prisma.workout.create({
@@ -237,6 +283,36 @@ async function main() {
   }
 
   console.log(`Created ${numEntries} body weight entries for Jake`);
+
+  // Movement data for Jake (runs and walks)
+  const movementData = [
+    { type: "RUN" as const, distance: 3.1, duration: 28, daysAgo: 25 },
+    { type: "WALK" as const, distance: 1.5, duration: 25, daysAgo: 23 },
+    { type: "RUN" as const, distance: 2.8, duration: 26, daysAgo: 20 },
+    { type: "WALK" as const, distance: 2.0, duration: 35, daysAgo: 17 },
+    { type: "RUN" as const, distance: 3.5, duration: 30, daysAgo: 14 },
+    { type: "RUN" as const, distance: 3.0, duration: 27, daysAgo: 10 },
+    { type: "WALK" as const, distance: 1.8, duration: 30, daysAgo: 7 },
+    { type: "RUN" as const, distance: 4.0, duration: 35, daysAgo: 5 },
+    { type: "WALK" as const, distance: 2.2, duration: 38, daysAgo: 3 },
+    { type: "RUN" as const, distance: 3.2, duration: 28, daysAgo: 1 },
+  ];
+
+  for (const m of movementData) {
+    const mDate = new Date(now);
+    mDate.setDate(now.getDate() - m.daysAgo);
+    await prisma.movement.create({
+      data: {
+        userId: jake.id,
+        type: m.type,
+        distance: m.distance,
+        duration: m.duration,
+        date: mDate,
+      },
+    });
+  }
+
+  console.log(`Created ${movementData.length} movement entries for Jake`);
 
   console.log("\nSeed complete!");
   console.log("Test accounts:");

@@ -35,16 +35,11 @@ interface DashboardData {
     current: number;
     change: number | null;
   } | null;
-  personalRecords: Array<{
-    liftName: string;
-    weight: number;
-    reps: number;
-    date: string;
-  }>;
   activeSession: {
     id: string;
     workoutName: string;
   } | null;
+  distanceThisWeek: number;
   quickRepeat: {
     workoutId: string;
     workoutName: string;
@@ -215,11 +210,18 @@ export default function HomeClient({
           change={formatChange(data.weekComparison.setsChange)}
         />
         <StatCard
-          label="Volume (7d)"
+          label="Mass Moved (7d)"
           value={formatVolume(data.stats.totalVolume)}
           unit="lbs"
           change={formatChange(data.weekComparison.volumeChange)}
         />
+        {data.distanceThisWeek > 0 && (
+          <StatCard
+            label="Distance (7d)"
+            value={data.distanceThisWeek.toString()}
+            unit="mi"
+          />
+        )}
       </div>
 
       {/* Consistency Graph */}
@@ -287,37 +289,6 @@ export default function HomeClient({
             </div>
           </div>
         </Link>
-      )}
-
-      {/* Personal Records */}
-      {data.personalRecords.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Personal Records</h3>
-            <Link href="/lifts" className="text-sm text-primary">
-              All lifts
-            </Link>
-          </div>
-          <div className="space-y-2">
-            {data.personalRecords.map((pr, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between p-3 bg-card rounded-lg border border-card-border"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">
-                    {i === 0 ? "\u{1F947}" : i === 1 ? "\u{1F948}" : "\u{1F949}"}
-                  </span>
-                  <span className="font-medium">{pr.liftName}</span>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold">{pr.weight} lbs</p>
-                  <p className="text-xs text-muted">{pr.reps} reps</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       )}
 
       {/* Recent Workouts */}

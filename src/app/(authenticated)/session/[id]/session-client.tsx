@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import SanityCheckModal from "@/components/SanityCheckModal";
 
 interface Lift {
   id: string;
   name: string;
   muscleGroup: string;
+  type: "STRENGTH" | "BODYWEIGHT" | "ENDURANCE";
 }
 
 interface WorkoutLift {
@@ -21,6 +23,7 @@ interface SetEntry {
   setNumber: number;
   weight: number;
   reps: number;
+  duration?: number;
 }
 
 interface SessionData {
@@ -35,6 +38,7 @@ interface SessionData {
     setNumber: number;
     weight: number;
     reps: number;
+    duration?: number;
   }>;
 }
 
@@ -51,9 +55,11 @@ function getRestSeconds(liftName: string): number {
 export default function SessionClient({
   session,
   lastByLift,
+  lastSessionSets,
 }: {
   session: SessionData;
   lastByLift: Record<string, { weight: number; reps: number }>;
+  lastSessionSets?: Record<string, Array<{ weight: number; reps: number; duration: number | null; setNumber: number }>>;
 }) {
   const router = useRouter();
   const [sets, setSets] = useState<Record<string, SetEntry[]>>(() => {
@@ -64,6 +70,14 @@ export default function SessionClient({
       );
       if (existing.length > 0) {
         initial[wl.liftId] = existing;
+      } else if (lastSessionSets?.[wl.liftId]?.length) {
+        initial[wl.liftId] = lastSessionSets[wl.liftId].map((s) => ({
+          liftId: wl.liftId,
+          setNumber: s.setNumber,
+          weight: s.weight,
+          reps: s.reps,
+          duration: s.duration || undefined,
+        }));
       } else {
         const last = lastByLift[wl.liftId];
         initial[wl.liftId] = [
@@ -78,8 +92,13 @@ export default function SessionClient({
     }
     return initial;
   });
+  const [checkedSets, setCheckedSets] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [elapsed, setElapsed] = useState("");
+  const [sanityCheck, setSanityCheck] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   // Rest timer state
   const [restTimer, setRestTimer] = useState<{
@@ -147,7 +166,7 @@ export default function SessionClient({
   function updateSet(
     liftId: string,
     setIndex: number,
-    field: "weight" | "reps",
+    field: "weight" | "reps" | "duration",
     value: string
   ) {
     setSets((prev) => {
@@ -155,35 +174,118 @@ export default function SessionClient({
       const liftSets = [...(updated[liftId] || [])];
       liftSets[setIndex] = {
         ...liftSets[setIndex],
-        [field]: field === "reps" ? parseInt(value) || 0 : parseFloat(value) || 0,
+        [field]: field === "weight" ? parseFloat(value) || 0 : parseInt(value) || 0,
       };
       updated[liftId] = liftSets;
       return updated;
     });
   }
 
+  function isSetComplete(set: SetEntry, liftType: string): boolean {
+    if (liftType === "BODYWEIGHT") return set.reps > 0;
+    if (liftType === "ENDURANCE") return (set.duration || 0) > 0;
+    return set.weight > 0 && set.reps > 0;
+  }
+
+  // Auto-save sets to server (fire-and-forget)
+  const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function autoSaveSets(currentSets: Record<string, SetEntry[]>) {
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
+    autoSaveRef.current = setTimeout(() => {
+      const allSets: SetEntry[] = [];
+      for (const liftSets of Object.values(currentSets)) {
+        for (const set of liftSets) {
+          if (set.weight > 0 || set.reps > 0 || (set.duration || 0) > 0) {
+            allSets.push(set);
+          }
+        }
+      }
+      fetch(`/api/sessions/${session.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sets: allSets, finish: false }),
+      }).catch(() => {});
+    }, 2000);
+  }
+
   // Called on blur — only triggers on first completion to avoid phantom timers
   function handleSetBlur(liftId: string, setIndex: number) {
     const liftSets = sets[liftId] || [];
     const set = liftSets[setIndex];
-    if (!set || set.weight <= 0 || set.reps <= 0) return;
+    const wl = session.workout.workoutLifts.find((w) => w.liftId === liftId);
+    if (!set || !wl || !isSetComplete(set, wl.lift.type)) return;
 
-    const setKey = `${liftId}-${setIndex}-${set.weight}-${set.reps}`;
+    const setKey = `${liftId}-${setIndex}-${set.weight}-${set.reps}-${set.duration || 0}`;
     if (completedSetsRef.current.has(setKey)) return;
     completedSetsRef.current.add(setKey);
 
-    const wl = session.workout.workoutLifts.find((w) => w.liftId === liftId);
-    if (wl) startRestTimer(wl.lift.name);
+    startRestTimer(wl.lift.name);
   }
 
-  // Called on checkmark tap — always starts/restarts the rest timer
+  // Sanity check for a set — returns warning message or null
+  function getSanityWarning(liftId: string, set: SetEntry, liftType: string): string | null {
+    if (liftType === "STRENGTH") {
+      if (set.weight > 1000) {
+        return "Over 1,000 lbs? Are you a forklift? Double-check that number.";
+      }
+      if (set.reps > 100) {
+        return "100+ reps? That's either cardio or a typo.";
+      }
+      const last = lastByLift[liftId];
+      if (last) {
+        if (set.weight > 0 && last.weight > 0 && set.weight >= last.weight * 2) {
+          return "Whoa \u2014 that's double what you did last time. Feeling superhuman?";
+        }
+        if (set.reps > 0 && last.reps > 0 && set.reps >= last.reps * 2) {
+          return "That's twice the reps from last time. Are you sure you counted right?";
+        }
+      }
+    }
+    if (liftType === "BODYWEIGHT" && set.reps > 200) {
+      return "200+ reps? Are you training for the Olympics?";
+    }
+    if (liftType === "ENDURANCE" && (set.duration || 0) > 3600) {
+      return "Over an hour? That's impressive if true. Double-check?";
+    }
+    return null;
+  }
+
+  // Called on checkmark tap — validates then marks set as done and starts rest timer
   function handleSetCheck(liftId: string, setIndex: number) {
     const liftSets = sets[liftId] || [];
     const set = liftSets[setIndex];
-    if (!set || set.weight <= 0 || set.reps <= 0) return;
-
     const wl = session.workout.workoutLifts.find((w) => w.liftId === liftId);
-    if (wl) startRestTimer(wl.lift.name);
+    if (!set || !wl || !isSetComplete(set, wl.lift.type)) return;
+
+    const warning = getSanityWarning(liftId, set, wl.lift.type);
+    if (warning) {
+      setSanityCheck({
+        message: warning,
+        onConfirm: () => {
+          const setKey = `${liftId}-${setIndex}`;
+          setCheckedSets((prev) => new Set(prev).add(setKey));
+          startRestTimer(wl.lift.name);
+          autoSaveSets(sets);
+          setSanityCheck(null);
+        },
+      });
+      return;
+    }
+
+    const setKey = `${liftId}-${setIndex}`;
+    setCheckedSets((prev) => new Set(prev).add(setKey));
+    startRestTimer(wl.lift.name);
+    autoSaveSets(sets);
+  }
+
+  function handleUncheckSet(liftId: string, setIndex: number) {
+    const setKey = `${liftId}-${setIndex}`;
+    setCheckedSets((prev) => {
+      const next = new Set(prev);
+      next.delete(setKey);
+      return next;
+    });
   }
 
   function addSet(liftId: string) {
@@ -216,9 +318,11 @@ export default function SessionClient({
 
   async function handleFinish() {
     const allSets: SetEntry[] = [];
-    for (const liftSets of Object.values(sets)) {
+    for (const [liftId, liftSets] of Object.entries(sets)) {
+      const wl = session.workout.workoutLifts.find((w) => w.liftId === liftId);
+      const liftType = wl?.lift.type || "STRENGTH";
       for (const set of liftSets) {
-        if (set.weight > 0 || set.reps > 0) {
+        if (isSetComplete(set, liftType)) {
           allSets.push(set);
         }
       }
@@ -226,6 +330,22 @@ export default function SessionClient({
 
     if (allSets.length === 0) {
       if (!confirm("You haven't logged any sets. Finish anyway?")) return;
+    }
+
+    // Check for empty lifts
+    const emptyLifts = session.workout.workoutLifts.filter((wl) => {
+      const liftSets = sets[wl.liftId] || [];
+      return !liftSets.some((s) => s.weight > 0 || s.reps > 0);
+    });
+    if (emptyLifts.length > 0 && allSets.length > 0) {
+      const names = emptyLifts.map((wl) => wl.lift.name).join(", ");
+      if (!confirm(`You didn't log anything for ${names}. Skip on purpose?`)) return;
+    }
+
+    // Check for speed-run workout (< 5 minutes)
+    const elapsedMs = Date.now() - new Date(session.startedAt).getTime();
+    if (elapsedMs < 5 * 60 * 1000 && allSets.length > 0) {
+      if (!confirm("5-minute workout? Speed run? Just making sure you're done.")) return;
     }
 
     setSaving(true);
@@ -250,7 +370,7 @@ export default function SessionClient({
   }
 
   async function handleCancel() {
-    if (!confirm("Cancel this workout? All data will be lost.")) return;
+    if (!confirm("Cancel this workout? This will delete all logged sets.")) return;
     try {
       const res = await fetch(`/api/sessions/${session.id}`, { method: "DELETE" });
       if (!res.ok) {
@@ -271,6 +391,14 @@ export default function SessionClient({
 
   return (
     <div>
+      {sanityCheck && (
+        <SanityCheckModal
+          message={sanityCheck.message}
+          onConfirm={sanityCheck.onConfirm}
+          onCancel={() => setSanityCheck(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-xl font-bold">{session.workout.name}</h2>
@@ -321,6 +449,20 @@ export default function SessionClient({
           const liftSets = sets[wl.liftId] || [];
           const last = lastByLift[wl.liftId];
           const restDuration = getRestSeconds(wl.lift.name);
+          const liftType = wl.lift.type || "STRENGTH";
+
+          const lastLabel =
+            liftType === "ENDURANCE"
+              ? null
+              : liftType === "BODYWEIGHT"
+              ? last ? `Last: ${last.reps} reps` : null
+              : last ? `Last: ${last.weight}x${last.reps}` : null;
+
+          // Grid columns depend on lift type
+          const gridCols =
+            liftType === "STRENGTH"
+              ? "grid-cols-[28px_1fr_1fr_36px_36px]"
+              : "grid-cols-[28px_1fr_36px_36px]";
 
           return (
             <div
@@ -328,76 +470,114 @@ export default function SessionClient({
               className="p-4 bg-card rounded-lg border border-card-border"
             >
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold">{wl.lift.name}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold">{wl.lift.name}</h3>
+                  {liftType !== "STRENGTH" && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                      liftType === "BODYWEIGHT" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"
+                    }`}>
+                      {liftType === "BODYWEIGHT" ? "BW" : "Time"}
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-muted">{restDuration}s rest</span>
-                  {last && (
-                    <span className="text-xs text-muted">
-                      Last: {last.weight}x{last.reps}
-                    </span>
+                  {lastLabel && (
+                    <span className="text-xs text-muted">{lastLabel}</span>
                   )}
                 </div>
               </div>
 
               <div className="space-y-2">
                 {/* Header */}
-                <div className="grid grid-cols-[28px_1fr_1fr_36px_36px] gap-1 text-xs text-muted">
+                <div className={`grid ${gridCols} gap-1 text-xs text-muted`}>
                   <span>Set</span>
-                  <span>Weight</span>
-                  <span>Reps</span>
+                  {liftType === "STRENGTH" && <span>Weight</span>}
+                  <span>{liftType === "ENDURANCE" ? "Seconds" : "Reps"}</span>
                   <span></span>
                   <span></span>
                 </div>
 
                 {liftSets.map((set, i) => {
-                  const isComplete = set.weight > 0 && set.reps > 0;
+                  const complete = isSetComplete(set, liftType);
+                  const isChecked = checkedSets.has(`${wl.liftId}-${i}`);
                   return (
                     <div
                       key={i}
-                      className="grid grid-cols-[28px_1fr_1fr_36px_36px] gap-1 items-center"
+                      className={`grid ${gridCols} gap-1 items-center ${
+                        isChecked ? "opacity-40" : ""
+                      }`}
                     >
                       <span className="text-sm text-muted text-center">
                         {set.setNumber}
                       </span>
-                      <input
-                        type="number"
-                        value={set.weight || ""}
-                        onChange={(e) =>
-                          updateSet(wl.liftId, i, "weight", e.target.value)
-                        }
-                        onBlur={() => handleSetBlur(wl.liftId, i)}
-                        placeholder="0"
-                        step="2.5"
-                        className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary"
-                        inputMode="decimal"
-                      />
-                      <input
-                        type="number"
-                        value={set.reps || ""}
-                        onChange={(e) =>
-                          updateSet(wl.liftId, i, "reps", e.target.value)
-                        }
-                        onBlur={() => handleSetBlur(wl.liftId, i)}
-                        placeholder="0"
-                        className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary"
-                        inputMode="numeric"
-                      />
-                      <button
-                        onClick={() => {
-                          handleSetCheck(wl.liftId, i);
-                        }}
-                        className={`flex items-center justify-center w-9 h-11 rounded transition-colors ${
-                          isComplete
-                            ? "text-success"
-                            : "text-muted hover:text-foreground"
-                        }`}
-                        title="Log set & start rest timer"
-                      >
-                        &#10003;
-                      </button>
+                      {liftType === "STRENGTH" && (
+                        <input
+                          type="number"
+                          value={set.weight || ""}
+                          onChange={(e) =>
+                            updateSet(wl.liftId, i, "weight", e.target.value)
+                          }
+                          onBlur={() => handleSetBlur(wl.liftId, i)}
+                          placeholder="0"
+                          step="2.5"
+                          disabled={isChecked}
+                          className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                          inputMode="decimal"
+                        />
+                      )}
+                      {liftType === "ENDURANCE" ? (
+                        <input
+                          type="number"
+                          value={set.duration || ""}
+                          onChange={(e) =>
+                            updateSet(wl.liftId, i, "duration", e.target.value)
+                          }
+                          onBlur={() => handleSetBlur(wl.liftId, i)}
+                          placeholder="sec"
+                          disabled={isChecked}
+                          className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                          inputMode="numeric"
+                        />
+                      ) : (
+                        <input
+                          type="number"
+                          value={set.reps || ""}
+                          onChange={(e) =>
+                            updateSet(wl.liftId, i, "reps", e.target.value)
+                          }
+                          onBlur={() => handleSetBlur(wl.liftId, i)}
+                          placeholder="0"
+                          disabled={isChecked}
+                          className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                          inputMode="numeric"
+                        />
+                      )}
+                      {isChecked ? (
+                        <button
+                          onClick={() => handleUncheckSet(wl.liftId, i)}
+                          className="flex items-center justify-center w-9 h-11 rounded text-muted/60 hover:text-foreground transition-colors"
+                          title="Tap to edit this set"
+                        >
+                          &#10003;
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleSetCheck(wl.liftId, i)}
+                          className={`flex items-center justify-center w-9 h-11 rounded transition-colors ${
+                            complete
+                              ? "text-success"
+                              : "text-muted hover:text-foreground"
+                          }`}
+                          title="Log set & start rest timer"
+                        >
+                          &#10003;
+                        </button>
+                      )}
                       <button
                         onClick={() => removeSet(wl.liftId, i)}
-                        className="flex items-center justify-center w-9 h-11 text-muted hover:text-danger text-sm rounded transition-colors"
+                        disabled={isChecked}
+                        className="flex items-center justify-center w-9 h-11 text-muted hover:text-danger text-sm rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Remove set"
                       >
                         &#10005;

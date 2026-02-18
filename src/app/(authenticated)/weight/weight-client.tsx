@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import SanityCheckModal from "@/components/SanityCheckModal";
 import {
   LineChart,
   Line,
@@ -26,13 +27,26 @@ export default function WeightClient({
   const [weight, setWeight] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState(false);
+  const [sanityCheck, setSanityCheck] = useState<{
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    const numWeight = parseFloat(weight);
-    if (!numWeight || numWeight <= 0) return;
+  function getWeightSanityWarning(numWeight: number): string | null {
+    if (numWeight < 50 || numWeight > 500) {
+      return "That doesn't look like a human weight. Want to double-check?";
+    }
+    if (entries.length > 0) {
+      const lastEntry = entries[entries.length - 1];
+      if (Math.abs(numWeight - lastEntry.weight) > 10) {
+        return "That's a big jump from your last weigh-in. Sure about that?";
+      }
+    }
+    return null;
+  }
+
+  async function doSaveWeight(numWeight: number) {
     setSaving(true);
-
     const res = await fetch("/api/weight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -52,6 +66,26 @@ export default function WeightClient({
     setSaving(false);
   }
 
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    const numWeight = parseFloat(weight);
+    if (!numWeight || numWeight <= 0) return;
+
+    const warning = getWeightSanityWarning(numWeight);
+    if (warning) {
+      setSanityCheck({
+        message: warning,
+        onConfirm: () => {
+          setSanityCheck(null);
+          doSaveWeight(numWeight);
+        },
+      });
+      return;
+    }
+
+    doSaveWeight(numWeight);
+  }
+
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + "T00:00:00");
     return `${d.getMonth() + 1}/${d.getDate()}`;
@@ -66,6 +100,14 @@ export default function WeightClient({
 
   return (
     <div>
+      {sanityCheck && (
+        <SanityCheckModal
+          message={sanityCheck.message}
+          onConfirm={sanityCheck.onConfirm}
+          onCancel={() => setSanityCheck(null)}
+        />
+      )}
+
       <h2 className="text-xl font-bold mb-4">Body Weight</h2>
 
       <form

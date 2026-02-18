@@ -72,39 +72,14 @@ export async function GET() {
     orderBy: { recordedAt: "desc" },
   });
 
-  // Personal records: bounded query
-  const prAggregates = await prisma.sessionSet.groupBy({
-    by: ["liftId"],
-    where: {
-      session: { userId, finishedAt: { not: null } },
-    },
-    _max: { weight: true },
+  // Movement distance this week
+  const movements = await prisma.movement.findMany({
+    where: { userId, date: { gte: sevenDaysAgo } },
   });
-
-  const topPRAggregates = prAggregates
-    .filter((pr) => pr._max.weight !== null)
-    .sort((a, b) => Number(b._max.weight) - Number(a._max.weight))
-    .slice(0, 3);
-
-  const topPRs: Array<{ liftName: string; weight: number; reps: number; date: string }> = [];
-  for (const pr of topPRAggregates) {
-    const set = await prisma.sessionSet.findFirst({
-      where: {
-        liftId: pr.liftId,
-        weight: pr._max.weight!,
-        session: { userId, finishedAt: { not: null } },
-      },
-      include: { lift: true, session: true },
-    });
-    if (set) {
-      topPRs.push({
-        liftName: set.lift.name,
-        weight: Number(set.weight),
-        reps: set.reps,
-        date: set.session.startedAt.toISOString().split("T")[0],
-      });
-    }
-  }
+  const distanceThisWeek = movements.reduce(
+    (sum, m) => sum + Number(m.distance),
+    0
+  );
 
   // Active session
   const activeSession = await prisma.session.findFirst({
@@ -192,7 +167,7 @@ export async function GET() {
             : null,
         }
       : null,
-    personalRecords: topPRs,
+    distanceThisWeek: Math.round(distanceThisWeek * 10) / 10,
     activeSession: activeSession
       ? { id: activeSession.id, workoutName: activeSession.workout.name }
       : null,

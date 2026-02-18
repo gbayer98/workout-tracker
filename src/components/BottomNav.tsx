@@ -8,6 +8,8 @@ const tabs = [
   { href: "/lifts", label: "Lifts", icon: "\u{1F4AA}" },
   { href: "/workouts", label: "Workouts", icon: "\u{1F4CB}" },
   { href: "/weight", label: "Weight", icon: "\u2696\uFE0F" },
+  { href: "/movement", label: "Move", icon: "\u{1F3C3}" },
+  { href: "/leaderboard", label: "Board", icon: "\u{1F3C6}" },
 ];
 
 export default function BottomNav() {
@@ -23,7 +25,7 @@ export default function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex flex-col items-center py-2 px-3 min-w-[64px] min-h-[56px] justify-center transition-colors ${
+              className={`flex flex-col items-center py-2 px-1 min-w-0 flex-1 min-h-[52px] justify-center transition-colors ${
                 isActive ? "text-primary" : "text-muted hover:text-foreground"
               }`}
             >
