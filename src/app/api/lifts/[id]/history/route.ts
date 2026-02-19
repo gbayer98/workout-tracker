@@ -40,8 +40,11 @@ export async function GET(
       if (lift?.type === "ENDURANCE") {
         if (duration > existing.duration) existing.duration = duration;
       } else {
-        if (weight > existing.weight) existing.weight = weight;
-        if (reps > existing.reps) existing.reps = reps;
+        // Use the heaviest set's reps (not independent max of each)
+        if (weight > existing.weight) {
+          existing.weight = weight;
+          existing.reps = reps;
+        }
       }
     }
   }

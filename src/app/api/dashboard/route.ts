@@ -52,14 +52,30 @@ export async function GET() {
     select: { startedAt: true },
   });
 
-  // Streak
-  const weekStreak = calculateWeekStreak(allSessions.map((s) => s.startedAt));
+  // All movement entries (runs/walks count as workouts for consistency)
+  const allMovements = await prisma.movement.findMany({
+    where: { userId },
+    select: { date: true },
+  });
 
-  // Total workouts this week
+  // Combine session dates and movement dates for streak/consistency
+  const allActivityDates = [
+    ...allSessions.map((s) => s.startedAt),
+    ...allMovements.map((m) => m.date),
+  ];
+
+  // Streak
+  const weekStreak = calculateWeekStreak(allActivityDates);
+
+  // Total workouts this week (sessions + movements)
   const thisWeekStart = getWeekStart(now);
-  const workoutsThisWeek = allSessions.filter(
+  const sessionsThisWeek = allSessions.filter(
     (s) => s.startedAt >= thisWeekStart
   ).length;
+  const movementsThisWeek = allMovements.filter(
+    (m) => m.date >= thisWeekStart
+  ).length;
+  const workoutsThisWeek = sessionsThisWeek + movementsThisWeek;
 
   // Body weight
   const latestWeight = await prisma.bodyWeight.findFirst({
@@ -123,12 +139,15 @@ export async function GET() {
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekEnd.getDate() + 7);
 
-    const count = allSessions.filter(
+    const sessionCount = allSessions.filter(
       (s) => s.startedAt >= weekStart && s.startedAt < weekEnd
+    ).length;
+    const movementCount = allMovements.filter(
+      (m) => m.date >= weekStart && m.date < weekEnd
     ).length;
 
     const monthDay = `${weekStart.getMonth() + 1}/${weekStart.getDate()}`;
-    consistencyWeeks.push({ weekLabel: monthDay, workouts: count });
+    consistencyWeeks.push({ weekLabel: monthDay, workouts: sessionCount + movementCount });
   }
 
   return NextResponse.json({

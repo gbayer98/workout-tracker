@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import SessionClient from "./session-client";
+import SessionEditClient from "./session-edit-client";
 
 export default async function SessionPage({
   params,
@@ -34,8 +35,20 @@ export default async function SessionPage({
     redirect("/home");
   }
 
+  // Finished session — show editable review page
   if (workoutSession.finishedAt) {
-    redirect("/home");
+    const serialized = {
+      ...workoutSession,
+      startedAt: workoutSession.startedAt.toISOString(),
+      finishedAt: workoutSession.finishedAt.toISOString(),
+      sessionSets: workoutSession.sessionSets.map((s) => ({
+        ...s,
+        weight: Number(s.weight),
+        duration: s.duration ?? undefined,
+        createdAt: s.createdAt.toISOString(),
+      })),
+    };
+    return <SessionEditClient session={serialized} />;
   }
 
   // Get last recorded values for each lift

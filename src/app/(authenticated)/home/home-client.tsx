@@ -317,9 +317,10 @@ export default function HomeClient({
         ) : (
           <div className="space-y-2">
             {data.recentSessions.map((s) => (
-              <div
+              <Link
                 key={s.id}
-                className="p-3 bg-card rounded-lg border border-card-border"
+                href={`/session/${s.id}`}
+                className="block p-3 bg-card rounded-lg border border-card-border hover:border-primary/30 transition-colors"
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -328,12 +329,15 @@ export default function HomeClient({
                       {formatDate(s.startedAt)}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium">{s.duration} min</p>
-                    <p className="text-xs text-muted">{s.setCount} sets</p>
+                  <div className="text-right flex items-center gap-3">
+                    <div>
+                      <p className="text-sm font-medium">{s.duration} min</p>
+                      <p className="text-xs text-muted">{s.setCount} sets</p>
+                    </div>
+                    <span className="text-muted text-sm">&#8250;</span>
                   </div>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

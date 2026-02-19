@@ -36,6 +36,12 @@ export default function WorkoutsClient({
   const [selectedLiftIds, setSelectedLiftIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allLifts, setAllLifts] = useState(availableLifts);
+  const [showNewLift, setShowNewLift] = useState(false);
+  const [newLiftName, setNewLiftName] = useState("");
+  const [newLiftMuscleGroup, setNewLiftMuscleGroup] = useState("Arms");
+  const [newLiftType, setNewLiftType] = useState<"STRENGTH" | "BODYWEIGHT" | "ENDURANCE">("STRENGTH");
+  const [creatingLift, setCreatingLift] = useState(false);
   const router = useRouter();
 
   function openCreate() {
@@ -128,8 +134,40 @@ export default function WorkoutsClient({
     }
   }
 
+  async function handleCreateLift() {
+    if (!newLiftName.trim()) return;
+    setCreatingLift(true);
+    try {
+      const res = await fetch("/api/lifts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newLiftName.trim(),
+          muscleGroup: newLiftMuscleGroup,
+          type: newLiftType,
+        }),
+      });
+      if (res.ok) {
+        const lift = await res.json();
+        setAllLifts((prev) => [...prev, lift]);
+        setSelectedLiftIds((prev) => [...prev, lift.id]);
+        setShowNewLift(false);
+        setNewLiftName("");
+        setNewLiftType("STRENGTH");
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || "Failed to create lift");
+      }
+    } catch {
+      setError("Network error creating lift");
+    }
+    setCreatingLift(false);
+  }
+
+  const MUSCLE_GROUPS = ["Arms", "Back", "Chest", "Core", "Legs", "Shoulders"];
+
   // Group available lifts by muscle group for the form
-  const liftsByGroup = availableLifts.reduce<Record<string, Lift[]>>((acc, lift) => {
+  const liftsByGroup = allLifts.reduce<Record<string, Lift[]>>((acc, lift) => {
     if (!acc[lift.muscleGroup]) acc[lift.muscleGroup] = [];
     acc[lift.muscleGroup].push(lift);
     return acc;
@@ -191,6 +229,118 @@ export default function WorkoutsClient({
               </div>
             ))}
           </div>
+
+          {/* Selected lift order */}
+          {selectedLiftIds.length > 1 && (
+            <div>
+              <p className="text-sm text-muted mb-1">Lift order:</p>
+              <div className="space-y-1">
+                {selectedLiftIds.map((id, i) => {
+                  const lift = allLifts.find((l) => l.id === id);
+                  if (!lift) return null;
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center gap-2 px-2 py-1.5 bg-input-bg rounded"
+                    >
+                      <span className="text-xs text-muted w-5 text-center">{i + 1}</span>
+                      <span className="text-sm flex-1">{lift.name}</span>
+                      <button
+                        type="button"
+                        disabled={i === 0}
+                        onClick={() => {
+                          setSelectedLiftIds((prev) => {
+                            const next = [...prev];
+                            [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                            return next;
+                          });
+                        }}
+                        className="px-1.5 py-0.5 text-xs text-muted hover:text-foreground disabled:opacity-30 transition-colors"
+                      >
+                        &#9650;
+                      </button>
+                      <button
+                        type="button"
+                        disabled={i === selectedLiftIds.length - 1}
+                        onClick={() => {
+                          setSelectedLiftIds((prev) => {
+                            const next = [...prev];
+                            [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                            return next;
+                          });
+                        }}
+                        className="px-1.5 py-0.5 text-xs text-muted hover:text-foreground disabled:opacity-30 transition-colors"
+                      >
+                        &#9660;
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Inline new lift creation */}
+          {!showNewLift ? (
+            <button
+              type="button"
+              onClick={() => setShowNewLift(true)}
+              className="w-full py-2 text-sm text-primary hover:text-primary-hover border border-dashed border-card-border rounded-lg transition-colors"
+            >
+              + Create New Lift
+            </button>
+          ) : (
+            <div className="p-3 bg-input-bg rounded-lg border border-input-border space-y-2">
+              <input
+                type="text"
+                placeholder="Lift name (e.g., Cable Fly)"
+                value={newLiftName}
+                onChange={(e) => setNewLiftName(e.target.value)}
+                className="w-full px-3 py-2 rounded bg-card border border-card-border text-foreground text-sm focus:outline-none focus:border-primary"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <select
+                  value={newLiftMuscleGroup}
+                  onChange={(e) => setNewLiftMuscleGroup(e.target.value)}
+                  className="flex-1 px-2 py-1.5 rounded bg-card border border-card-border text-foreground text-sm focus:outline-none focus:border-primary"
+                >
+                  {MUSCLE_GROUPS.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+                <select
+                  value={newLiftType}
+                  onChange={(e) => setNewLiftType(e.target.value as "STRENGTH" | "BODYWEIGHT" | "ENDURANCE")}
+                  className="flex-1 px-2 py-1.5 rounded bg-card border border-card-border text-foreground text-sm focus:outline-none focus:border-primary"
+                >
+                  <option value="STRENGTH">Strength</option>
+                  <option value="BODYWEIGHT">Bodyweight</option>
+                  <option value="ENDURANCE">Endurance</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCreateLift}
+                  disabled={creatingLift || !newLiftName.trim()}
+                  className="flex-1 py-1.5 text-sm bg-primary text-white rounded hover:bg-primary-hover disabled:opacity-50 transition-colors"
+                >
+                  {creatingLift ? "Creating..." : "Add Lift"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNewLift(false);
+                    setNewLiftName("");
+                  }}
+                  className="px-3 py-1.5 text-sm text-muted hover:text-foreground transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="flex gap-2">
             <button

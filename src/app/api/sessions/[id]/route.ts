@@ -94,8 +94,10 @@ export async function PUT(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Prevent modifications to finished sessions
-  if (workoutSession.finishedAt) {
+  const isFinished = !!workoutSession.finishedAt;
+
+  // For finished sessions, only allow set edits (not finishing again)
+  if (isFinished && finish) {
     return NextResponse.json(
       { error: "Session already finished" },
       { status: 400 }
