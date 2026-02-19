@@ -208,12 +208,6 @@ export default function HomeClient({
           unit={data.stats.weekStreak === 1 ? "week" : "weeks"}
         />
         <StatCard
-          label="Sets (7d)"
-          value={data.stats.totalSets.toString()}
-          unit="total"
-          change={formatChange(data.weekComparison.setsChange)}
-        />
-        <StatCard
           label="Mass Moved (7d)"
           value={formatVolume(data.stats.totalVolume)}
           unit="lbs"
