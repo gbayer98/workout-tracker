@@ -103,18 +103,32 @@ async function main() {
       displayOrder: 3,
     },
     {
+      name: "Pull-Ups",
+      liftName: "Pull-Up" as string | null,
+      metric: "Max reps in a single set",
+      rule: "Most pull-ups completed in a single set",
+      displayOrder: 4,
+    },
+    {
+      name: "Romanian Deadlift",
+      liftName: "Romanian Deadlift" as string | null,
+      metric: "Max weight with at least 3 reps",
+      rule: "Heaviest weight where you completed 3 or more reps in a single set",
+      displayOrder: 5,
+    },
+    {
       name: "Workouts This Week",
       liftName: null as string | null,
       metric: "Finished sessions this week",
       rule: "Number of completed workouts in the current Monday-Sunday week",
-      displayOrder: 4,
+      displayOrder: 6,
     },
     {
-      name: "Total Miles Moved",
+      name: "Miles This Month",
       liftName: null as string | null,
-      metric: "All-time distance",
-      rule: "Total miles logged across all runs and walks",
-      displayOrder: 5,
+      metric: "Monthly distance",
+      rule: "Total miles logged across all runs and walks this calendar month",
+      displayOrder: 7,
     },
   ];
 

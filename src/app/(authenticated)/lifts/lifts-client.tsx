@@ -36,6 +36,26 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
     onConfirm: () => void;
   } | null>(null);
 
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  async function handleDeleteLift(lift: Lift) {
+    if (!confirm(`Delete "${lift.name}"? This cannot be undone.`)) return;
+    setDeleting(lift.id);
+    try {
+      const res = await fetch(`/api/lifts/${lift.id}`, { method: "DELETE" });
+      if (res.ok) {
+        setLifts((prev) => prev.filter((l) => l.id !== lift.id));
+        if (selectedLiftId === lift.id) setSelectedLiftId(null);
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || "Failed to delete lift");
+      }
+    } catch {
+      setError("Network error — check your connection");
+    }
+    setDeleting(null);
+  }
+
   const filtered = lifts.filter(
     (l) =>
       l.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -232,6 +252,15 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
                 {selectedLiftId === lift.id && (
                   <div className="mt-1 mb-2">
                     <LiftHistoryChart liftId={lift.id} liftName={lift.name} liftType={lift.type} />
+                    {!lift.isGlobal && (
+                      <button
+                        onClick={() => handleDeleteLift(lift)}
+                        disabled={deleting === lift.id}
+                        className="mt-2 w-full py-2 text-sm text-danger hover:text-danger-hover border border-danger/30 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {deleting === lift.id ? "Deleting..." : "Delete Lift"}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

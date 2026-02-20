@@ -101,15 +101,26 @@ export default function LeaderboardClient() {
               </div>
             ) : (
               <div className="space-y-1.5">
-                {cat.entries.map((entry, i) => {
+                {cat.entries.slice(0, 5).map((entry, i) => {
+                  // Assign rank based on value — ties share the same rank
+                  let rank = 1;
+                  for (let j = 0; j < i; j++) {
+                    if (cat.entries[j].value !== entry.value) {
+                      rank = j + 1;
+                    }
+                  }
+                  if (i > 0 && cat.entries[i - 1].value !== entry.value) {
+                    rank = i + 1;
+                  }
+
                   const medal =
-                    i === 0
+                    rank === 1
                       ? "\u{1F947}"
-                      : i === 1
+                      : rank === 2
                       ? "\u{1F948}"
-                      : i === 2
+                      : rank === 3
                       ? "\u{1F949}"
-                      : `#${i + 1}`;
+                      : `#${rank}`;
 
                   return (
                     <div

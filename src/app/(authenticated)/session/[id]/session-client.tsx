@@ -43,18 +43,18 @@ interface SessionData {
   }>;
 }
 
-// Compound lifts get longer rest (90s), isolation gets 60s
+// Default rest: compound lifts get 90s, isolation gets 60s
 const COMPOUND_LIFTS = [
   "Bench Press", "Incline Bench Press", "Overhead Press", "Squat",
   "Deadlift", "Romanian Deadlift", "Barbell Row", "Leg Press", "Pull-Up",
 ];
 
-function getRestSeconds(liftName: string): number {
+function getDefaultRestSeconds(liftName: string): number {
   return COMPOUND_LIFTS.some((c) => liftName.includes(c)) ? 90 : 60;
 }
 
 export default function SessionClient({
-  session,
+  session: initialSession,
   lastByLift,
   lastSessionSets,
 }: {
@@ -62,6 +62,7 @@ export default function SessionClient({
   lastByLift: Record<string, { weight: number; reps: number }>;
   lastSessionSets?: Record<string, Array<{ weight: number; reps: number; duration: number | null; setNumber: number }>>;
 }) {
+  const [session, setSession] = useState(initialSession);
   const router = useRouter();
   const [sets, setSets] = useState<Record<string, SetEntry[]>>(() => {
     const initial: Record<string, SetEntry[]> = {};
@@ -108,6 +109,62 @@ export default function SessionClient({
     bodyweightReps: number;
     leaderboardPositions: Array<{ category: string; position: number; value: string }>;
   } | null>(null);
+
+  // Per-lift rest overrides (liftId -> seconds)
+  const [restOverrides, setRestOverrides] = useState<Record<string, number>>({});
+  const [editingRest, setEditingRest] = useState<string | null>(null);
+
+  function getRestSeconds(liftName: string, liftId: string): number {
+    if (restOverrides[liftId] !== undefined) return restOverrides[liftId];
+    return getDefaultRestSeconds(liftName);
+  }
+
+  // Add lift state
+  const [showAddLift, setShowAddLift] = useState(false);
+  const [availableLifts, setAvailableLifts] = useState<Lift[]>([]);
+  const [liftSearch, setLiftSearch] = useState("");
+  const [addingLift, setAddingLift] = useState(false);
+
+  async function handleAddLift(lift: Lift) {
+    setAddingLift(true);
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/add-lift`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ liftId: lift.id }),
+      });
+      if (res.ok) {
+        const { workoutLift } = await res.json();
+        setSession((prev) => ({
+          ...prev,
+          workout: {
+            ...prev.workout,
+            workoutLifts: [...prev.workout.workoutLifts, {
+              id: workoutLift.id,
+              liftId: lift.id,
+              order: workoutLift.order,
+              lift,
+            }],
+          },
+        }));
+        setSets((prev) => ({
+          ...prev,
+          [lift.id]: [{ liftId: lift.id, setNumber: 1, weight: 0, reps: 0 }],
+        }));
+        setShowAddLift(false);
+        setLiftSearch("");
+      }
+    } catch { /* silent */ }
+    setAddingLift(false);
+  }
+
+  function openAddLift() {
+    setShowAddLift(true);
+    fetch("/api/lifts")
+      .then((r) => r.json())
+      .then((data) => setAvailableLifts(data))
+      .catch(() => {});
+  }
 
   // Rest timer state
   const [restTimer, setRestTimer] = useState<{
@@ -156,16 +213,16 @@ export default function SessionClient({
     }
   }, [restTimer.active, restTimer.remainingSeconds > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const startRestTimer = useCallback((liftName: string) => {
+  const startRestTimer = useCallback((liftName: string, liftId: string) => {
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-    const seconds = getRestSeconds(liftName);
+    const seconds = getRestSeconds(liftName, liftId);
     setRestTimer({
       active: true,
       totalSeconds: seconds,
       remainingSeconds: seconds,
       liftName,
     });
-  }, []);
+  }, [restOverrides]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dismissRestTimer = useCallback(() => {
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
@@ -229,7 +286,7 @@ export default function SessionClient({
     if (completedSetsRef.current.has(setKey)) return;
     completedSetsRef.current.add(setKey);
 
-    startRestTimer(wl.lift.name);
+    startRestTimer(wl.lift.name, wl.liftId);
   }
 
   // Sanity check for a set — returns warning message or null
@@ -274,7 +331,7 @@ export default function SessionClient({
         onConfirm: () => {
           const setKey = `${liftId}-${setIndex}`;
           setCheckedSets((prev) => new Set(prev).add(setKey));
-          startRestTimer(wl.lift.name);
+          startRestTimer(wl.lift.name, wl.liftId);
           autoSaveSets(sets);
           setSanityCheck(null);
         },
@@ -284,7 +341,7 @@ export default function SessionClient({
 
     const setKey = `${liftId}-${setIndex}`;
     setCheckedSets((prev) => new Set(prev).add(setKey));
-    startRestTimer(wl.lift.name);
+    startRestTimer(wl.lift.name, wl.liftId);
     autoSaveSets(sets);
   }
 
@@ -470,7 +527,7 @@ export default function SessionClient({
         {session.workout.workoutLifts.map((wl) => {
           const liftSets = sets[wl.liftId] || [];
           const last = lastByLift[wl.liftId];
-          const restDuration = getRestSeconds(wl.lift.name);
+          const restDuration = getRestSeconds(wl.lift.name, wl.liftId);
           const liftType = wl.lift.type || "STRENGTH";
 
           const lastLabel =
@@ -503,7 +560,35 @@ export default function SessionClient({
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted">{restDuration}s rest</span>
+                  {editingRest === wl.liftId ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        defaultValue={restDuration}
+                        min={0}
+                        max={600}
+                        autoFocus
+                        className="w-14 px-1 py-0.5 text-xs text-center rounded bg-input-bg border border-primary text-foreground focus:outline-none"
+                        inputMode="numeric"
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setRestOverrides((prev) => ({ ...prev, [wl.liftId]: Math.max(0, Math.min(600, val)) }));
+                          setEditingRest(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                        }}
+                      />
+                      <span className="text-xs text-muted">s</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setEditingRest(wl.liftId)}
+                      className="text-xs text-muted hover:text-primary transition-colors"
+                    >
+                      {restDuration}s rest
+                    </button>
+                  )}
                   {lastLabel && (
                     <span className="text-xs text-muted">{lastLabel}</span>
                   )}
@@ -625,6 +710,61 @@ export default function SessionClient({
           );
         })}
       </div>
+
+      {/* Add Lift Button */}
+      <button
+        onClick={openAddLift}
+        className="mt-4 w-full py-3 text-sm text-primary hover:text-primary-hover border border-dashed border-primary/30 rounded-lg transition-colors"
+      >
+        + Add a Lift
+      </button>
+
+      {/* Add Lift Picker Modal */}
+      {showAddLift && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center">
+          <div className="bg-card w-full max-w-lg rounded-t-2xl p-4 max-h-[70vh] flex flex-col">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-lg">Add a Lift</h3>
+              <button
+                onClick={() => { setShowAddLift(false); setLiftSearch(""); }}
+                className="text-muted hover:text-foreground text-xl px-2"
+              >
+                &#10005;
+              </button>
+            </div>
+            <input
+              type="text"
+              placeholder="Search lifts..."
+              value={liftSearch}
+              onChange={(e) => setLiftSearch(e.target.value)}
+              className="w-full px-3 py-2 mb-3 rounded-lg bg-input-bg border border-input-border text-foreground focus:outline-none focus:border-primary"
+              autoFocus
+            />
+            <div className="overflow-y-auto flex-1 space-y-1">
+              {availableLifts
+                .filter((l) => {
+                  const alreadyAdded = session.workout.workoutLifts.some(
+                    (wl) => wl.liftId === l.id
+                  );
+                  if (alreadyAdded) return false;
+                  if (!liftSearch) return true;
+                  return l.name.toLowerCase().includes(liftSearch.toLowerCase());
+                })
+                .map((l) => (
+                  <button
+                    key={l.id}
+                    onClick={() => handleAddLift(l)}
+                    disabled={addingLift}
+                    className="w-full text-left px-4 py-3 bg-input-bg rounded-lg hover:border-primary/30 border border-input-border transition-colors disabled:opacity-50"
+                  >
+                    <span className="font-medium">{l.name}</span>
+                    <span className="ml-2 text-xs text-muted">{l.muscleGroup}</span>
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 space-y-2 pb-4">
         <button

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import OnboardingModal from "@/components/OnboardingModal";
 
 interface RecentSession {
   id: string;
@@ -58,7 +59,14 @@ export default function HomeClient({
   const [feedbackText, setFeedbackText] = useState("");
   const [feedbackSending, setFeedbackSending] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && !localStorage.getItem("hasSeenOnboarding")) {
+      setShowOnboarding(true);
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/dashboard")
@@ -148,6 +156,15 @@ export default function HomeClient({
 
   return (
     <div className="space-y-5">
+      {showOnboarding && (
+        <OnboardingModal
+          onDismiss={() => {
+            setShowOnboarding(false);
+            localStorage.setItem("hasSeenOnboarding", "true");
+          }}
+        />
+      )}
+
       {/* Greeting */}
       <div>
         <p className="text-muted text-sm">{greeting}</p>

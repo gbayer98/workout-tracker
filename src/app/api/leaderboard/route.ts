@@ -10,12 +10,56 @@ export async function GET() {
 
   const currentUserId = session.user.id;
 
+  // Rename legacy category if it exists
+  await prisma.leaderboardCategory.updateMany({
+    where: { name: "Total Miles Moved" },
+    data: {
+      name: "Miles This Month",
+      metric: "Monthly distance",
+      rule: "Total miles logged across all runs and walks this calendar month",
+      displayOrder: 7,
+    },
+  });
+
+  // Ensure new leaderboard categories exist
+  const newCategories = [
+    {
+      name: "Pull-Ups",
+      liftName: "Pull-Up",
+      metric: "Max reps in a single set",
+      rule: "Most pull-ups completed in a single set",
+      displayOrder: 4,
+    },
+    {
+      name: "Romanian Deadlift",
+      liftName: "Romanian Deadlift",
+      metric: "Max weight with at least 3 reps",
+      rule: "Heaviest weight where you completed 3 or more reps in a single set",
+      displayOrder: 5,
+    },
+  ];
+  for (const cat of newCategories) {
+    const exists = await prisma.leaderboardCategory.findFirst({
+      where: { name: cat.name },
+    });
+    if (!exists) {
+      await prisma.leaderboardCategory.create({ data: cat });
+    }
+  }
+
+  // Update display orders for existing categories
+  await prisma.leaderboardCategory.updateMany({
+    where: { name: "Workouts This Week" },
+    data: { displayOrder: 6 },
+  });
+
   const categories = await prisma.leaderboardCategory.findMany({
     orderBy: { displayOrder: "asc" },
   });
 
   const now = new Date();
   const weekStart = getWeekStart(now);
+  const monthStart = getMonthStart(now);
 
   const results: Array<{
     id: string;
@@ -32,7 +76,11 @@ export async function GET() {
   }> = [];
 
   for (const category of categories) {
-    if (category.liftName === "Bench Press" || category.liftName === "Squat") {
+    if (
+      category.liftName === "Bench Press" ||
+      category.liftName === "Squat" ||
+      category.liftName === "Romanian Deadlift"
+    ) {
       // Max weight with at least 3 reps
       const lift = await prisma.lift.findFirst({
         where: { name: category.liftName, isGlobal: true },
@@ -93,10 +141,10 @@ export async function GET() {
           isCurrentUser: userId === currentUserId,
         })),
       });
-    } else if (category.liftName === "Push-Up") {
+    } else if (category.liftName === "Push-Up" || category.liftName === "Pull-Up") {
       // Max reps in single set
       const lift = await prisma.lift.findFirst({
-        where: { name: "Push-Up", isGlobal: true },
+        where: { name: category.liftName!, isGlobal: true },
       });
 
       if (!lift) {
@@ -185,9 +233,10 @@ export async function GET() {
           isCurrentUser: userId === currentUserId,
         })),
       });
-    } else if (category.name === "Total Miles Moved") {
-      // All-time total distance from movement entries
+    } else if (category.name === "Miles This Month") {
+      // Monthly total distance from movement entries
       const movements = await prisma.movement.findMany({
+        where: { date: { gte: monthStart } },
         include: { user: true },
       });
 
@@ -235,4 +284,8 @@ function getWeekStart(date: Date): Date {
   d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function getMonthStart(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
 }
