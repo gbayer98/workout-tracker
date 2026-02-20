@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { getAviationComparison } from "@/lib/aviation-facts";
 
 interface WorkoutSummary {
   workoutName: string;
@@ -31,16 +32,24 @@ export default function WorkoutCompleteModal({
 }) {
   const [visible, setVisible] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showFact, setShowFact] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(false);
+
+  const aviationFact = useMemo(
+    () => getAviationComparison(summary.massMoved),
+    [summary.massMoved]
+  );
 
   useEffect(() => {
     // Staggered entrance
     requestAnimationFrame(() => setVisible(true));
     const t1 = setTimeout(() => setShowStats(true), 400);
-    const t2 = setTimeout(() => setShowLeaderboard(true), 800);
+    const t2 = setTimeout(() => setShowFact(true), 900);
+    const t3 = setTimeout(() => setShowLeaderboard(true), 1400);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      clearTimeout(t3);
     };
   }, []);
 
@@ -104,6 +113,29 @@ export default function WorkoutCompleteModal({
             )}
           </div>
         </div>
+
+        {/* Aviation fact */}
+        {aviationFact && (
+          <div
+            className="transition-all duration-700 mb-4"
+            style={{
+              opacity: showFact ? 1 : 0,
+              transform: showFact ? "translateY(0) scale(1)" : "translateY(15px) scale(0.95)",
+            }}
+          >
+            <div className="border-t border-card-border pt-4">
+              <div className="text-center p-4 bg-primary/5 border border-primary/20 rounded-xl">
+                <p className="text-3xl mb-2">{aviationFact.emoji}</p>
+                <p className="font-bold text-primary text-sm leading-snug">
+                  {aviationFact.headline}
+                </p>
+                <p className="text-xs text-muted mt-2 leading-relaxed">
+                  {aviationFact.detail}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Leaderboard positions */}
         {summary.leaderboardPositions.length > 0 && (
