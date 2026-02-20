@@ -54,7 +54,7 @@ export async function GET(request: Request) {
   }
 
   await getResend().emails.send({
-    from: "Workout Tracker <onboarding@resend.dev>",
+    from: "Workout Tracker <noreply@updates.rocketcoffeeservice.com>",
     to: emailTo,
     subject: `Feedback Digest — ${feedback.length} new ${feedback.length === 1 ? "entry" : "entries"}`,
     text: emailBody,
