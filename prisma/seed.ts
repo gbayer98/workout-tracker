@@ -86,49 +86,49 @@ async function main() {
       liftName: "Bench Press" as string | null,
       metric: "Max weight with at least 3 reps",
       rule: "Heaviest weight where you completed 3 or more reps in a single set",
-      displayOrder: 1,
+      displayOrder: 2,
     },
     {
       name: "Squat",
       liftName: "Squat" as string | null,
       metric: "Max weight with at least 3 reps",
       rule: "Heaviest weight where you completed 3 or more reps in a single set",
-      displayOrder: 2,
+      displayOrder: 3,
     },
     {
       name: "Push-Ups",
       liftName: "Push-Up" as string | null,
       metric: "Max reps in a single set",
       rule: "Most push-ups completed in a single set",
-      displayOrder: 3,
+      displayOrder: 4,
     },
     {
       name: "Pull-Ups",
       liftName: "Pull-Up" as string | null,
       metric: "Max reps in a single set",
       rule: "Most pull-ups completed in a single set",
-      displayOrder: 4,
+      displayOrder: 5,
     },
     {
       name: "Romanian Deadlift",
       liftName: "Romanian Deadlift" as string | null,
       metric: "Max weight with at least 3 reps",
       rule: "Heaviest weight where you completed 3 or more reps in a single set",
-      displayOrder: 5,
+      displayOrder: 6,
     },
     {
-      name: "Workouts This Week",
+      name: "Freak Athlete of the Month",
       liftName: null as string | null,
-      metric: "Finished sessions this week",
-      rule: "Number of completed workouts in the current Monday-Sunday week",
-      displayOrder: 6,
+      metric: "Total mass moved + total feet ran this month",
+      rule: "Sum of (weight x reps) for all sets plus (miles x 5280) for all runs this calendar month",
+      displayOrder: 1,
     },
     {
       name: "Miles This Month",
       liftName: null as string | null,
       metric: "Monthly distance",
       rule: "Total miles logged across all runs and walks this calendar month",
-      displayOrder: 7,
+      displayOrder: 8,
     },
   ];
 
@@ -142,6 +142,44 @@ async function main() {
   }
 
   console.log("Ensured leaderboard categories exist");
+
+  // === Groups (always run, safe with upserts) ===
+  const ngpGroup = await prisma.group.upsert({
+    where: { name: "NGP (Next Generation Physique)" },
+    update: {},
+    create: { name: "NGP (Next Generation Physique)" },
+  });
+
+  const globalGroup = await prisma.group.upsert({
+    where: { name: "Global" },
+    update: {},
+    create: { name: "Global" },
+  });
+
+  // Add all existing users to NGP
+  const allUsers = await prisma.user.findMany({ select: { id: true } });
+  for (const u of allUsers) {
+    await prisma.userGroup.upsert({
+      where: { userId_groupId: { userId: u.id, groupId: ngpGroup.id } },
+      update: {},
+      create: { userId: u.id, groupId: ngpGroup.id },
+    });
+  }
+
+  // Add Grant to Global group
+  const grant = await prisma.user.findFirst({
+    where: { username: { equals: "grant", mode: "insensitive" } },
+  });
+  if (grant) {
+    await prisma.userGroup.upsert({
+      where: { userId_groupId: { userId: grant.id, groupId: globalGroup.id } },
+      update: {},
+      create: { userId: grant.id, groupId: globalGroup.id },
+    });
+    console.log("Added Grant to Global group");
+  }
+
+  console.log(`Ensured groups exist: NGP, Global. Added ${allUsers.length} users to NGP.`);
 
   // Only seed demo data if Jake has no sessions yet
   const jakeSessions = await prisma.session.count({

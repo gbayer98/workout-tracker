@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import OnboardingModal from "@/components/OnboardingModal";
+import GroupSelectionModal from "@/components/GroupSelectionModal";
 
 interface RecentSession {
   id: string;
@@ -60,11 +61,14 @@ export default function HomeClient({
   const [feedbackSending, setFeedbackSending] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showGroupSelection, setShowGroupSelection] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     if (typeof window !== "undefined" && !localStorage.getItem("hasSeenOnboarding")) {
       setShowOnboarding(true);
+    } else if (typeof window !== "undefined" && !localStorage.getItem("hasSelectedGroups")) {
+      setShowGroupSelection(true);
     }
   }, []);
 
@@ -161,7 +165,17 @@ export default function HomeClient({
           onDismiss={() => {
             setShowOnboarding(false);
             localStorage.setItem("hasSeenOnboarding", "true");
+            // After onboarding, show group selection if not done yet
+            if (!localStorage.getItem("hasSelectedGroups")) {
+              setShowGroupSelection(true);
+            }
           }}
+        />
+      )}
+
+      {showGroupSelection && !showOnboarding && (
+        <GroupSelectionModal
+          onDone={() => setShowGroupSelection(false)}
         />
       )}
 

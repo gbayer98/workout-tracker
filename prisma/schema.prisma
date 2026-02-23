@@ -27,6 +27,26 @@ model User {
   bodyWeights BodyWeight[]
   movements   Movement[]
   feedback    Feedback[]
+  userGroups  UserGroup[]
+}
+
+model Group {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  createdAt DateTime    @default(now())
+  members   UserGroup[]
+}
+
+model UserGroup {
+  id      String @id @default(cuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
 }
 
 enum LiftType {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 interface LeaderboardEntry {
   username: string;
@@ -67,12 +68,18 @@ export default function LeaderboardClient() {
     );
   }
 
+  function formatValue(val: number): string {
+    if (val >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
+    if (val >= 1_000) return `${(val / 1_000).toFixed(1)}k`;
+    return val.toString();
+  }
+
   return (
     <div>
       <div className="mb-4">
         <h2 className="text-xl font-bold">Leaderboard</h2>
         <p className="text-sm text-muted mt-1">
-          Compete across all accounts. Personal bests tracked automatically.
+          Showing people in your groups. <Link href="/settings" className="text-primary hover:underline">Manage groups</Link>
         </p>
       </div>
 
@@ -150,7 +157,7 @@ export default function LeaderboardClient() {
                       </div>
                       <div className="text-right">
                         <p className="font-bold">
-                          {entry.value} {entry.unit}
+                          {formatValue(entry.value)} {entry.unit}
                         </p>
                         {entry.date && (
                           <p className="text-xs text-muted">{entry.date}</p>

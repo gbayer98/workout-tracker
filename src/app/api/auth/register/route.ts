@@ -102,6 +102,19 @@ export async function POST(request: Request) {
       // Starter workout is optional — don't fail registration
     }
 
+    // Auto-add to all existing groups (non-blocking)
+    try {
+      const allGroups = await prisma.group.findMany({ select: { id: true } });
+      if (allGroups.length > 0) {
+        await prisma.userGroup.createMany({
+          data: allGroups.map((g) => ({ userId: user.id, groupId: g.id })),
+          skipDuplicates: true,
+        });
+      }
+    } catch {
+      // Group membership is optional — don't fail registration
+    }
+
     return NextResponse.json(
       { username: user.username },
       { status: 201 }

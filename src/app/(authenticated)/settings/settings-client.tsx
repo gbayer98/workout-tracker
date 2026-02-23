@@ -20,6 +20,12 @@ export default function SettingsClient() {
   const [savingPw, setSavingPw] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
+  // Groups
+  const [groups, setGroups] = useState<{ id: string; name: string; memberCount: number; isMember: boolean }[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<Set<string>>(new Set());
+  const [savingGroups, setSavingGroups] = useState(false);
+  const [groupMsg, setGroupMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => {
@@ -38,6 +44,14 @@ export default function SettingsClient() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    fetch("/api/groups")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: { id: string; name: string; memberCount: number; isMember: boolean }[]) => {
+        setGroups(data);
+        setSelectedGroups(new Set(data.filter((g) => g.isMember).map((g) => g.id)));
+      })
+      .catch(() => {});
   }, []);
 
   async function handleSaveName(e: React.FormEvent) {
@@ -91,6 +105,41 @@ export default function SettingsClient() {
       setPwMsg({ text: data?.error || "Failed to change password", ok: false });
     }
     setSavingPw(false);
+  }
+
+  function toggleGroup(id: string) {
+    setSelectedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+    setGroupMsg(null);
+  }
+
+  async function handleSaveGroups() {
+    if (selectedGroups.size === 0) {
+      setGroupMsg({ text: "You must be in at least one group", ok: false });
+      return;
+    }
+    setSavingGroups(true);
+    setGroupMsg(null);
+
+    const res = await fetch("/api/groups", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groupIds: Array.from(selectedGroups) }),
+    });
+
+    if (res.ok) {
+      setGroupMsg({ text: "Groups updated!", ok: true });
+    } else {
+      setGroupMsg({ text: "Failed to update groups", ok: false });
+    }
+    setSavingGroups(false);
   }
 
   if (loading) {
@@ -199,6 +248,70 @@ export default function SettingsClient() {
           {savingPw ? "Changing..." : "Change Password"}
         </button>
       </form>
+
+      {/* Groups */}
+      {groups.length > 0 && (
+        <div className="mb-6 p-4 bg-card rounded-lg border border-card-border space-y-3">
+          <h3 className="font-semibold">My Groups</h3>
+          <p className="text-xs text-muted">
+            Groups determine who you see on the leaderboard.
+          </p>
+          <div className="space-y-2">
+            {groups.map((g) => (
+              <button
+                key={g.id}
+                onClick={() => toggleGroup(g.id)}
+                className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                  selectedGroups.has(g.id)
+                    ? "bg-primary/10 border-primary/40"
+                    : "bg-input-bg border-input-border hover:border-card-border"
+                }`}
+              >
+                <div className="text-left">
+                  <p className="font-medium text-sm">{g.name}</p>
+                  <p className="text-xs text-muted">
+                    {g.memberCount} {g.memberCount === 1 ? "member" : "members"}
+                  </p>
+                </div>
+                <div
+                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                    selectedGroups.has(g.id)
+                      ? "bg-primary border-primary"
+                      : "border-input-border"
+                  }`}
+                >
+                  {selectedGroups.has(g.id) && (
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+          {groupMsg && (
+            <p className={`text-sm ${groupMsg.ok ? "text-success" : "text-danger"}`}>
+              {groupMsg.text}
+            </p>
+          )}
+          <button
+            onClick={handleSaveGroups}
+            disabled={savingGroups}
+            className="w-full py-2.5 bg-primary text-white font-medium rounded-lg hover:bg-primary-hover disabled:opacity-50 transition-colors"
+          >
+            {savingGroups ? "Saving..." : "Save Groups"}
+          </button>
+        </div>
+      )}
 
       {/* Logout */}
       <button
