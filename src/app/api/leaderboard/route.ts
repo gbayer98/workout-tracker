@@ -53,11 +53,17 @@ export async function GET() {
     },
   });
 
-  // Ensure Freak Athlete of the Month exists
-  const freakExists = await prisma.leaderboardCategory.findFirst({
+  // Deduplicate: keep only one "Freak Athlete of the Month" row
+  const freakRows = await prisma.leaderboardCategory.findMany({
     where: { name: "Freak Athlete of the Month" },
+    orderBy: { id: "asc" },
   });
-  if (!freakExists) {
+  if (freakRows.length > 1) {
+    const idsToDelete = freakRows.slice(1).map((r) => r.id);
+    await prisma.leaderboardCategory.deleteMany({
+      where: { id: { in: idsToDelete } },
+    });
+  } else if (freakRows.length === 0) {
     await prisma.leaderboardCategory.create({
       data: {
         name: "Freak Athlete of the Month",
