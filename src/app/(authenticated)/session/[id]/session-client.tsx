@@ -172,7 +172,8 @@ export default function SessionClient({
     totalSeconds: number;
     remainingSeconds: number;
     liftName: string;
-  }>({ active: false, totalSeconds: 0, remainingSeconds: 0, liftName: "" });
+    liftId: string;
+  }>({ active: false, totalSeconds: 0, remainingSeconds: 0, liftName: "", liftId: "" });
   const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Track completed sets to detect new set completions
@@ -221,12 +222,13 @@ export default function SessionClient({
       totalSeconds: seconds,
       remainingSeconds: seconds,
       liftName,
+      liftId,
     });
   }, [restOverrides]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dismissRestTimer = useCallback(() => {
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-    setRestTimer((prev) => ({ ...prev, active: false, remainingSeconds: 0 }));
+    setRestTimer((prev) => ({ ...prev, active: false, remainingSeconds: 0, liftId: "" }));
   }, []);
 
   function updateSet(
@@ -352,6 +354,51 @@ export default function SessionClient({
       next.delete(setKey);
       return next;
     });
+  }
+
+  async function handleRemoveLift(liftId: string, liftName: string) {
+    if (session.workout.workoutLifts.length <= 1) return;
+
+    const liftSets = sets[liftId] || [];
+    const hasData = liftSets.some(
+      (s) => s.weight > 0 || s.reps > 0 || (s.duration || 0) > 0
+    );
+
+    if (hasData) {
+      if (!confirm(`Remove ${liftName}? Any logged sets for this lift will be deleted.`)) return;
+    }
+
+    try {
+      const res = await fetch(`/api/sessions/${session.id}/remove-lift`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ liftId }),
+      });
+      if (!res.ok) return;
+    } catch {
+      return;
+    }
+
+    setSession((prev) => ({
+      ...prev,
+      workout: {
+        ...prev.workout,
+        workoutLifts: prev.workout.workoutLifts.filter((wl) => wl.liftId !== liftId),
+      },
+    }));
+    setSets((prev) => {
+      const updated = { ...prev };
+      delete updated[liftId];
+      return updated;
+    });
+    setCheckedSets((prev) => {
+      const next = new Set(prev);
+      for (const key of prev) {
+        if (key.startsWith(`${liftId}-`)) next.delete(key);
+      }
+      return next;
+    });
+    if (restTimer.liftId === liftId) dismissRestTimer();
   }
 
   function addSet(liftId: string) {
@@ -488,47 +535,13 @@ export default function SessionClient({
         </div>
       </div>
 
-      {/* Rest Timer */}
-      {restTimer.active && restTimer.remainingSeconds > 0 && (
-        <button
-          onClick={dismissRestTimer}
-          className="w-full mb-4 p-3 bg-primary/10 border border-primary/30 rounded-xl text-left transition-colors hover:bg-primary/15"
-        >
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-medium text-primary">
-              Rest — {restTimer.liftName}
-            </p>
-            <p className="text-lg font-mono font-bold text-primary">
-              {restMinutes}:{restSeconds.toString().padStart(2, "0")}
-            </p>
-          </div>
-          <div className="w-full h-1.5 bg-card-border rounded-full overflow-hidden">
-            <div
-              className="h-full bg-primary rounded-full transition-all duration-1000"
-              style={{ width: `${restProgress}%` }}
-            />
-          </div>
-          <p className="text-xs text-muted mt-1.5 text-center">Tap to dismiss</p>
-        </button>
-      )}
-
-      {/* Timer done notification */}
-      {!restTimer.active && restTimer.totalSeconds > 0 && restTimer.remainingSeconds === 0 && (
-        <button
-          onClick={() => setRestTimer({ active: false, totalSeconds: 0, remainingSeconds: 0, liftName: "" })}
-          className="w-full mb-4 p-3 bg-success/15 border border-success/30 rounded-xl text-center transition-colors hover:bg-success/20"
-        >
-          <p className="text-success font-semibold">Rest complete! Time to lift.</p>
-          <p className="text-xs text-muted mt-1">Tap to dismiss</p>
-        </button>
-      )}
-
       <div className="space-y-6">
         {session.workout.workoutLifts.map((wl) => {
           const liftSets = sets[wl.liftId] || [];
           const last = lastByLift[wl.liftId];
           const restDuration = getRestSeconds(wl.lift.name, wl.liftId);
           const liftType = wl.lift.type || "STRENGTH";
+          const timerIsForThisLift = restTimer.liftId === wl.liftId;
 
           const lastLabel =
             liftType === "ENDURANCE"
@@ -537,175 +550,222 @@ export default function SessionClient({
               ? last ? `Last: ${last.reps} reps` : null
               : last ? `Last: ${last.weight}x${last.reps}` : null;
 
-          // Grid columns depend on lift type
+          // Grid columns: when checked, merge check+X into single Edit button
           const gridCols =
             liftType === "STRENGTH"
               ? "grid-cols-[28px_1fr_1fr_36px_36px]"
               : "grid-cols-[28px_1fr_36px_36px]";
+          const gridColsChecked =
+            liftType === "STRENGTH"
+              ? "grid-cols-[28px_1fr_1fr_72px]"
+              : "grid-cols-[28px_1fr_72px]";
 
           return (
-            <div
-              key={wl.id}
-              className="p-4 bg-card rounded-lg border border-card-border"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{wl.lift.name}</h3>
-                  {liftType !== "STRENGTH" && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${
-                      liftType === "BODYWEIGHT" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"
-                    }`}>
-                      {liftType === "BODYWEIGHT" ? "BW" : "Time"}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  {editingRest === wl.liftId ? (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        defaultValue={restDuration}
-                        min={0}
-                        max={600}
-                        autoFocus
-                        className="w-14 px-1 py-0.5 text-xs text-center rounded bg-input-bg border border-primary text-foreground focus:outline-none"
-                        inputMode="numeric"
-                        onBlur={(e) => {
-                          const val = parseInt(e.target.value) || 0;
-                          setRestOverrides((prev) => ({ ...prev, [wl.liftId]: Math.max(0, Math.min(600, val)) }));
-                          setEditingRest(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-                        }}
-                      />
-                      <span className="text-xs text-muted">s</span>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setEditingRest(wl.liftId)}
-                      className="text-xs text-muted hover:text-primary transition-colors"
-                    >
-                      {restDuration}s rest
-                    </button>
-                  )}
-                  {lastLabel && (
-                    <span className="text-xs text-muted">{lastLabel}</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {/* Header */}
-                <div className={`grid ${gridCols} gap-1 text-xs text-muted`}>
-                  <span>Set</span>
-                  {liftType === "STRENGTH" && <span>Weight</span>}
-                  <span>{liftType === "ENDURANCE" ? "Seconds" : "Reps"}</span>
-                  <span></span>
-                  <span></span>
-                </div>
-
-                {liftSets.map((set, i) => {
-                  const complete = isSetComplete(set, liftType);
-                  const isChecked = checkedSets.has(`${wl.liftId}-${i}`);
-                  return (
+            <div key={wl.id}>
+              {/* Rest Timer — positioned above the lift that triggered it */}
+              {timerIsForThisLift && restTimer.active && restTimer.remainingSeconds > 0 && (
+                <button
+                  onClick={dismissRestTimer}
+                  className="w-full mb-3 p-3 bg-primary/10 border border-primary/30 rounded-xl text-left transition-colors hover:bg-primary/15"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-medium text-primary">
+                      Rest — {restTimer.liftName}
+                    </p>
+                    <p className="text-lg font-mono font-bold text-primary">
+                      {restMinutes}:{restSeconds.toString().padStart(2, "0")}
+                    </p>
+                  </div>
+                  <div className="w-full h-1.5 bg-card-border rounded-full overflow-hidden">
                     <div
-                      key={i}
-                      className={`grid ${gridCols} gap-1 items-center ${
-                        isChecked ? "opacity-40" : ""
-                      }`}
-                    >
-                      <span className="text-sm text-muted text-center">
-                        {set.setNumber}
+                      className="h-full bg-primary rounded-full transition-all duration-1000"
+                      style={{ width: `${restProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted mt-1.5 text-center">Tap to dismiss</p>
+                </button>
+              )}
+
+              {/* Timer done notification — at the lift that triggered it */}
+              {timerIsForThisLift && !restTimer.active && restTimer.totalSeconds > 0 && restTimer.remainingSeconds === 0 && (
+                <button
+                  onClick={() => setRestTimer({ active: false, totalSeconds: 0, remainingSeconds: 0, liftName: "", liftId: "" })}
+                  className="w-full mb-3 p-3 bg-success/15 border border-success/30 rounded-xl text-center transition-colors hover:bg-success/20"
+                >
+                  <p className="text-success font-semibold">Rest complete! Time to lift.</p>
+                  <p className="text-xs text-muted mt-1">Tap to dismiss</p>
+                </button>
+              )}
+
+              <div className="p-4 bg-card rounded-lg border border-card-border">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold">{wl.lift.name}</h3>
+                    {liftType !== "STRENGTH" && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${
+                        liftType === "BODYWEIGHT" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"
+                      }`}>
+                        {liftType === "BODYWEIGHT" ? "BW" : "Time"}
                       </span>
-                      {liftType === "STRENGTH" && (
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {editingRest === wl.liftId ? (
+                      <div className="flex items-center gap-1">
                         <input
                           type="number"
-                          value={set.weight || ""}
-                          onChange={(e) =>
-                            updateSet(wl.liftId, i, "weight", e.target.value)
-                          }
-                          onBlur={() => handleSetBlur(wl.liftId, i)}
-                          placeholder="0"
-                          min="0"
-                          max="2000"
-                          step="2.5"
-                          disabled={isChecked}
-                          className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
-                          inputMode="decimal"
-                        />
-                      )}
-                      {liftType === "ENDURANCE" ? (
-                        <input
-                          type="number"
-                          value={set.duration || ""}
-                          onChange={(e) =>
-                            updateSet(wl.liftId, i, "duration", e.target.value)
-                          }
-                          onBlur={() => handleSetBlur(wl.liftId, i)}
-                          placeholder="sec"
-                          min="0"
-                          max="86400"
-                          disabled={isChecked}
-                          className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                          defaultValue={restDuration}
+                          min={0}
+                          max={600}
+                          autoFocus
+                          className="w-14 px-1 py-0.5 text-xs text-center rounded bg-input-bg border border-primary text-foreground focus:outline-none"
                           inputMode="numeric"
+                          onBlur={(e) => {
+                            const val = parseInt(e.target.value) || 0;
+                            setRestOverrides((prev) => ({ ...prev, [wl.liftId]: Math.max(0, Math.min(600, val)) }));
+                            setEditingRest(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                          }}
                         />
-                      ) : (
-                        <input
-                          type="number"
-                          value={set.reps || ""}
-                          onChange={(e) =>
-                            updateSet(wl.liftId, i, "reps", e.target.value)
-                          }
-                          onBlur={() => handleSetBlur(wl.liftId, i)}
-                          placeholder="0"
-                          min="0"
-                          max="1000"
-                          disabled={isChecked}
-                          className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
-                          inputMode="numeric"
-                        />
-                      )}
-                      {isChecked ? (
-                        <button
-                          onClick={() => handleUncheckSet(wl.liftId, i)}
-                          className="flex items-center justify-center w-9 h-11 rounded text-muted/60 hover:text-foreground transition-colors"
-                          title="Tap to edit this set"
-                        >
-                          &#10003;
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleSetCheck(wl.liftId, i)}
-                          className={`flex items-center justify-center w-9 h-11 rounded transition-colors ${
-                            complete
-                              ? "text-success"
-                              : "text-muted hover:text-foreground"
-                          }`}
-                          title="Log set & start rest timer"
-                        >
-                          &#10003;
-                        </button>
-                      )}
+                        <span className="text-xs text-muted">s</span>
+                      </div>
+                    ) : (
                       <button
-                        onClick={() => removeSet(wl.liftId, i)}
-                        disabled={isChecked}
-                        className="flex items-center justify-center w-9 h-11 text-muted hover:text-danger text-sm rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                        title="Remove set"
+                        onClick={() => setEditingRest(wl.liftId)}
+                        className="text-xs text-muted hover:text-primary transition-colors"
+                      >
+                        {restDuration}s rest
+                      </button>
+                    )}
+                    {lastLabel && (
+                      <span className="text-xs text-muted">{lastLabel}</span>
+                    )}
+                    {session.workout.workoutLifts.length > 1 && (
+                      <button
+                        onClick={() => handleRemoveLift(wl.liftId, wl.lift.name)}
+                        className="text-xs text-muted hover:text-danger transition-colors ml-1"
+                        title="Remove lift"
                       >
                         &#10005;
                       </button>
-                    </div>
-                  );
-                })}
-              </div>
+                    )}
+                  </div>
+                </div>
 
-              <button
-                onClick={() => addSet(wl.liftId)}
-                className="mt-2 w-full py-1.5 text-sm text-primary hover:text-primary-hover border border-dashed border-card-border rounded transition-colors"
-              >
-                + Add Set
-              </button>
+                <div className="space-y-2">
+                  {/* Header */}
+                  <div className={`grid ${gridCols} gap-1 text-xs text-muted`}>
+                    <span>Set</span>
+                    {liftType === "STRENGTH" && <span>Weight</span>}
+                    <span>{liftType === "ENDURANCE" ? "Seconds" : "Reps"}</span>
+                    <span></span>
+                    <span></span>
+                  </div>
+
+                  {liftSets.map((set, i) => {
+                    const complete = isSetComplete(set, liftType);
+                    const isChecked = checkedSets.has(`${wl.liftId}-${i}`);
+                    return (
+                      <div
+                        key={i}
+                        className={`grid ${isChecked ? gridColsChecked : gridCols} gap-1 items-center ${
+                          isChecked ? "opacity-50" : ""
+                        }`}
+                      >
+                        <span className="text-sm text-muted text-center">
+                          {set.setNumber}
+                        </span>
+                        {liftType === "STRENGTH" && (
+                          <input
+                            type="number"
+                            value={set.weight || ""}
+                            onChange={(e) =>
+                              updateSet(wl.liftId, i, "weight", e.target.value)
+                            }
+                            onBlur={() => handleSetBlur(wl.liftId, i)}
+                            placeholder="0"
+                            min="0"
+                            max="2000"
+                            step="2.5"
+                            disabled={isChecked}
+                            className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                            inputMode="decimal"
+                          />
+                        )}
+                        {liftType === "ENDURANCE" ? (
+                          <input
+                            type="number"
+                            value={set.duration || ""}
+                            onChange={(e) =>
+                              updateSet(wl.liftId, i, "duration", e.target.value)
+                            }
+                            onBlur={() => handleSetBlur(wl.liftId, i)}
+                            placeholder="sec"
+                            min="0"
+                            max="86400"
+                            disabled={isChecked}
+                            className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                            inputMode="numeric"
+                          />
+                        ) : (
+                          <input
+                            type="number"
+                            value={set.reps || ""}
+                            onChange={(e) =>
+                              updateSet(wl.liftId, i, "reps", e.target.value)
+                            }
+                            onBlur={() => handleSetBlur(wl.liftId, i)}
+                            placeholder="0"
+                            min="0"
+                            max="1000"
+                            disabled={isChecked}
+                            className="w-full px-2 py-2 rounded bg-input-bg border border-input-border text-foreground text-center text-lg focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                            inputMode="numeric"
+                          />
+                        )}
+                        {isChecked ? (
+                          <button
+                            onClick={() => handleUncheckSet(wl.liftId, i)}
+                            className="flex items-center justify-center h-11 rounded text-primary hover:text-primary-hover text-xs font-semibold transition-colors"
+                          >
+                            Edit
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleSetCheck(wl.liftId, i)}
+                              className={`flex items-center justify-center w-9 h-11 rounded transition-colors ${
+                                complete
+                                  ? "text-success"
+                                  : "text-muted hover:text-foreground"
+                              }`}
+                              title="Log set & start rest timer"
+                            >
+                              &#10003;
+                            </button>
+                            <button
+                              onClick={() => removeSet(wl.liftId, i)}
+                              className="flex items-center justify-center w-9 h-11 text-muted hover:text-danger text-sm rounded transition-colors"
+                              title="Remove set"
+                            >
+                              &#10005;
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => addSet(wl.liftId)}
+                  className="mt-2 w-full py-1.5 text-sm text-primary hover:text-primary-hover border border-dashed border-card-border rounded transition-colors"
+                >
+                  + Add Set
+                </button>
+              </div>
             </div>
           );
         })}

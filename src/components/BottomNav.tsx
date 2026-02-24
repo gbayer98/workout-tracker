@@ -14,11 +14,15 @@ function HomeIcon({ className }: { className?: string }) {
 
 function DumbbellIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6.5 6.5h11M6.5 17.5h11" />
-      <rect x="2" y="5" width="4.5" height="14" rx="1" />
-      <rect x="17.5" y="5" width="4.5" height="14" rx="1" />
-      <line x1="12" y1="5" x2="12" y2="19" />
+    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {/* Bar */}
+      <line x1="2" y1="12" x2="22" y2="12" />
+      {/* Left plates */}
+      <rect x="4" y="7" width="3" height="10" rx="0.5" />
+      <rect x="7" y="8.5" width="2" height="7" rx="0.5" />
+      {/* Right plates */}
+      <rect x="17" y="7" width="3" height="10" rx="0.5" />
+      <rect x="15" y="8.5" width="2" height="7" rx="0.5" />
     </svg>
   );
 }
@@ -36,22 +40,35 @@ function ClipboardIcon({ className }: { className?: string }) {
 
 function ScaleIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3v17" />
-      <path d="M5 10l7-7 7 7" />
-      <rect x="4" y="20" width="16" height="1" rx="0.5" />
-      <circle cx="12" cy="13" r="3" />
+    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {/* Scale body */}
+      <rect x="3" y="5" width="18" height="16" rx="3" />
+      {/* Display window */}
+      <rect x="7" y="8" width="10" height="5" rx="1" />
+      {/* Dial line */}
+      <line x1="12" y1="9" x2="14.5" y2="11" />
+      {/* Base/feet */}
+      <line x1="6" y1="21" x2="8" y2="21" />
+      <line x1="16" y1="21" x2="18" y2="21" />
     </svg>
   );
 }
 
 function RunIcon({ className }: { className?: string }) {
   return (
-    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="14" cy="4" r="2" />
-      <path d="M18 22l-3-5-2.5-1.5" />
-      <path d="M6 13l3.5 1.5L12 22" />
-      <path d="M9.5 4.5L6 8l3 2 4-1 3 3" />
+    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {/* Head */}
+      <circle cx="13" cy="3.5" r="2" />
+      {/* Torso leaning forward */}
+      <path d="M11 7l-2 6" />
+      {/* Front arm (reaching forward) */}
+      <path d="M11 7l3.5-1.5" />
+      {/* Back arm (swinging back) */}
+      <path d="M10.5 9l-3.5 1" />
+      {/* Front leg (extended behind) */}
+      <path d="M9 13l-3 4.5-2.5 1" />
+      {/* Back leg (stepping forward) */}
+      <path d="M9 13l2 4 3.5 3" />
     </svg>
   );
 }
