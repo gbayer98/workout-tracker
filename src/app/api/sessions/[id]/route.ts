@@ -35,7 +35,7 @@ export async function GET(
   }
 
   // Get last recorded values for each lift
-  const liftIds = workoutSession.workout.workoutLifts.map((wl) => wl.liftId);
+  const liftIds = workoutSession.workout?.workoutLifts.map((wl) => wl.liftId) ?? [];
 
   const lastSets = await prisma.sessionSet.findMany({
     where: {
@@ -147,9 +147,17 @@ export async function PUT(
     }
 
     if (finish) {
+      // Get workout name to stamp on session for history preservation
+      const sess = await tx.session.findUnique({
+        where: { id },
+        include: { workout: { select: { name: true } } },
+      });
       await tx.session.update({
         where: { id },
-        data: { finishedAt: new Date() },
+        data: {
+          finishedAt: new Date(),
+          workoutName: sess?.workout?.name ?? null,
+        },
       });
     }
   });
@@ -266,7 +274,7 @@ export async function PUT(
       return NextResponse.json({
         success: true,
         summary: {
-          workoutName: finishedSession.workout.name,
+          workoutName: finishedSession.workout?.name ?? finishedSession.workoutName ?? "Workout",
           durationMin,
           totalSets,
           massMoved: Math.round(massMoved),

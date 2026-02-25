@@ -26,6 +26,7 @@ export default async function SessionPage({
         },
       },
       sessionSets: {
+        include: { lift: true },
         orderBy: [{ liftId: "asc" }, { setNumber: "asc" }],
       },
     },
@@ -37,8 +38,31 @@ export default async function SessionPage({
 
   // Finished session — show editable review page
   if (workoutSession.finishedAt) {
+    // If workout was deleted, build synthetic workout data from session sets
+    let workout = workoutSession.workout;
+    if (!workout) {
+      const uniqueLifts = new Map<string, typeof workoutSession.sessionSets[0]["lift"]>();
+      for (const s of workoutSession.sessionSets) {
+        if (!uniqueLifts.has(s.liftId)) uniqueLifts.set(s.liftId, s.lift);
+      }
+      workout = {
+        id: "deleted",
+        name: workoutSession.workoutName ?? "Deleted Workout",
+        userId: workoutSession.userId,
+        createdAt: workoutSession.startedAt,
+        workoutLifts: Array.from(uniqueLifts.entries()).map(([liftId, lift], i) => ({
+          id: `synthetic-${liftId}`,
+          workoutId: "deleted",
+          liftId,
+          order: i,
+          lift,
+        })),
+      };
+    }
+
     const serialized = {
       ...workoutSession,
+      workout,
       startedAt: workoutSession.startedAt.toISOString(),
       finishedAt: workoutSession.finishedAt.toISOString(),
       sessionSets: workoutSession.sessionSets.map((s) => ({
@@ -49,6 +73,11 @@ export default async function SessionPage({
       })),
     };
     return <SessionEditClient session={serialized} />;
+  }
+
+  // Active session — workout must exist (unfinished sessions for deleted workouts are cleaned up)
+  if (!workoutSession.workout) {
+    redirect("/home");
   }
 
   // Get last recorded values for each lift
@@ -78,7 +107,7 @@ export default async function SessionPage({
   }
 
   // Get the full set breakdown from the last session of the same workout
-  const lastWorkoutSession = await prisma.session.findFirst({
+  const lastWorkoutSession = workoutSession.workoutId ? await prisma.session.findFirst({
     where: {
       userId: session.user.id,
       workoutId: workoutSession.workoutId,
@@ -91,7 +120,7 @@ export default async function SessionPage({
         orderBy: [{ liftId: "asc" }, { setNumber: "asc" }],
       },
     },
-  });
+  }) : null;
 
   // Group last session sets by lift
   const lastSessionSetsByLift: Record<
@@ -112,6 +141,7 @@ export default async function SessionPage({
 
   const serialized = {
     ...workoutSession,
+    workout: workoutSession.workout!,
     startedAt: workoutSession.startedAt.toISOString(),
     sessionSets: workoutSession.sessionSets.map((s) => ({
       ...s,

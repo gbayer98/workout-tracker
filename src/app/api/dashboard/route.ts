@@ -153,7 +153,7 @@ export async function GET() {
   return NextResponse.json({
     recentSessions: recentSessions.map((s) => ({
       id: s.id,
-      workoutName: s.workout.name,
+      workoutName: s.workout?.name ?? s.workoutName ?? "Deleted Workout",
       startedAt: s.startedAt.toISOString(),
       finishedAt: s.finishedAt!.toISOString(),
       setCount: s.sessionSets.length,
@@ -188,12 +188,12 @@ export async function GET() {
       : null,
     distanceThisWeek: Math.round(distanceThisWeek * 10) / 10,
     activeSession: activeSession
-      ? { id: activeSession.id, workoutName: activeSession.workout.name }
+      ? { id: activeSession.id, workoutName: activeSession.workout?.name ?? activeSession.workoutName ?? "Workout" }
       : null,
-    quickRepeat: lastFinishedSession
+    quickRepeat: lastFinishedSession?.workoutId
       ? {
           workoutId: lastFinishedSession.workoutId,
-          workoutName: lastFinishedSession.workout.name,
+          workoutName: lastFinishedSession.workout?.name ?? lastFinishedSession.workoutName ?? "Workout",
         }
       : null,
   });

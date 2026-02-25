@@ -29,6 +29,7 @@ interface SessionData {
   id: string;
   startedAt: string;
   finishedAt: string;
+  workoutName?: string | null;
   workout: {
     name: string;
     workoutLifts: WorkoutLift[];

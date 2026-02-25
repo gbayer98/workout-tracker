@@ -31,6 +31,10 @@ export async function DELETE(
     return NextResponse.json({ error: "Session already finished" }, { status: 400 });
   }
 
+  if (!workoutSession.workout) {
+    return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+  }
+
   if (workoutSession.workout.workoutLifts.length <= 1) {
     return NextResponse.json({ error: "Cannot remove the last lift" }, { status: 400 });
   }

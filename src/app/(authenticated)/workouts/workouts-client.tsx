@@ -103,7 +103,7 @@ export default function WorkoutsClient({
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this workout and all its session history?")) return;
+    if (!confirm("Delete this workout? Your completed session history will be preserved.")) return;
     try {
       const res = await fetch(`/api/workouts/${id}`, { method: "DELETE" });
       if (res.ok) {

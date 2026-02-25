@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import LiftHistoryChart from "@/components/LiftHistoryChart";
 import SanityCheckModal from "@/components/SanityCheckModal";
 
@@ -37,6 +38,8 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
   } | null>(null);
 
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [quickLogging, setQuickLogging] = useState<string | null>(null);
+  const router = useRouter();
 
   async function handleDeleteLift(lift: Lift) {
     if (!confirm(`Delete "${lift.name}"? This cannot be undone.`)) return;
@@ -54,6 +57,32 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
       setError("Network error — check your connection");
     }
     setDeleting(null);
+  }
+
+  async function handleQuickLog(lift: Lift) {
+    setQuickLogging(lift.id);
+    try {
+      const res = await fetch("/api/sessions/quick-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ liftId: lift.id }),
+      });
+      if (res.ok) {
+        const session = await res.json();
+        router.push(`/session/${session.id}`);
+      } else if (res.status === 409) {
+        const data = await res.json();
+        if (data.sessionId) {
+          router.push(`/session/${data.sessionId}`);
+        }
+      } else {
+        const data = await res.json().catch(() => null);
+        setError(data?.error || "Failed to start quick log");
+      }
+    } catch {
+      setError("Network error — check your connection");
+    }
+    setQuickLogging(null);
   }
 
   const filtered = lifts.filter(
@@ -252,6 +281,13 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
                 {selectedLiftId === lift.id && (
                   <div className="mt-1 mb-2">
                     <LiftHistoryChart liftId={lift.id} liftName={lift.name} liftType={lift.type} />
+                    <button
+                      onClick={() => handleQuickLog(lift)}
+                      disabled={quickLogging === lift.id}
+                      className="mt-2 w-full py-2.5 text-sm font-semibold bg-success text-white rounded-lg hover:opacity-90 disabled:opacity-50 transition-opacity"
+                    >
+                      {quickLogging === lift.id ? "Starting..." : `Quick Log ${lift.name}`}
+                    </button>
                     {!lift.isGlobal && (
                       <button
                         onClick={() => handleDeleteLift(lift)}

@@ -24,10 +24,22 @@ interface AviationFact {
 const AVIATION_FACTS: AviationFact[] = [
   // ===== ULTRA LIGHT (1-25 lbs) =====
   {
+    weightLbs: 1,
+    name: "a 747 cockpit checklist binder",
+    fact: "Contains over 100 checklists. Pilots go through at least 12 of them every single flight.",
+    emoji: "\u{1F4CB}",
+  },
+  {
     weightLbs: 1.5,
     name: "an airplane mode switch",
     fact: "Just kidding. But the FAA's entire regulation on portable electronic devices is 47 pages long.",
     emoji: "\u{1F4F1}",
+  },
+  {
+    weightLbs: 2,
+    name: "an aircraft pitot tube",
+    fact: "This tiny tube measures airspeed by comparing air pressure. If it ices over, pilots lose speed indication entirely.",
+    emoji: "\u{1F321}\u{FE0F}",
   },
   {
     weightLbs: 3,
@@ -78,6 +90,13 @@ const AVIATION_FACTS: AviationFact[] = [
     emoji: "\u{1F680}",
   },
 
+  {
+    weightLbs: 24,
+    name: "a fighter pilot's survival kit",
+    fact: "Packed into the ejection seat: raft, flares, water, radio, mirror, fishing kit. Everything to survive until rescue.",
+    emoji: "\u{1F9F0}",
+  },
+
   // ===== LIGHT (25-100 lbs) =====
   {
     weightLbs: 27,
@@ -96,6 +115,12 @@ const AVIATION_FACTS: AviationFact[] = [
     name: "an aircraft emergency slide inflation bottle",
     fact: "Goes from a packed suitcase to a 16-foot slide in under 6 seconds. Don't pull that handle.",
     emoji: "\u{1F6DD}",
+  },
+  {
+    weightLbs: 38,
+    name: "an airplane oxygen generator canister",
+    fact: "Those masks that drop from the ceiling? They're powered by a chemical reaction, not a tank. Burns at 500\u00B0F to make oxygen.",
+    emoji: "\u{1F6E1}\u{FE0F}",
   },
   {
     weightLbs: 42,
@@ -122,6 +147,12 @@ const AVIATION_FACTS: AviationFact[] = [
     emoji: "\u{1F525}",
   },
   {
+    weightLbs: 80,
+    name: "a full-size aircraft tire (regional jet)",
+    fact: "Inflated to 200 PSI — about six times your car tire. Hits the runway at 150 mph and somehow doesn't explode.",
+    emoji: "\u{1F6DE}",
+  },
+  {
     weightLbs: 85,
     name: "an F-35 Lightning II helmet",
     fact: "Costs $400,000. Lets the pilot see through the airplane. Yes, through it. Cameras on the outside, display inside.",
@@ -134,6 +165,12 @@ const AVIATION_FACTS: AviationFact[] = [
     name: "a loaded airline cargo container (LD3 half)",
     fact: "That little metal igloo in the belly of every widebody. Your suitcase is in one right now.",
     emoji: "\u{1F9F3}",
+  },
+  {
+    weightLbs: 115,
+    name: "a Boeing 737 nose wheel",
+    fact: "Steers the plane on the ground at up to 70 degrees left or right. Controlled by a little tiller wheel in the cockpit.",
+    emoji: "\u{1F6DE}",
   },
   {
     weightLbs: 130,
@@ -172,6 +209,12 @@ const AVIATION_FACTS: AviationFact[] = [
     emoji: "\u{1F4E1}",
   },
   {
+    weightLbs: 250,
+    name: "the Apollo Command Module heat shield",
+    fact: "Ablative material that burned away at 5,000\u00B0F during reentry. Literally melted on purpose to keep astronauts alive.",
+    emoji: "\u{1F525}",
+  },
+  {
     weightLbs: 274,
     name: "a Rolls-Royce Trent 1000 fan blade set",
     fact: "Each blade is a single crystal of titanium alloy. A 787 has 20 of them per engine spinning at 2,700 RPM.",
@@ -188,6 +231,13 @@ const AVIATION_FACTS: AviationFact[] = [
     name: "a GBU-12 Paveway laser-guided bomb",
     fact: "A 500-lb bomb with a laser seeker bolted on. The weapon of choice for close air support since Vietnam.",
     emoji: "\u{1F4A5}",
+  },
+
+  {
+    weightLbs: 350,
+    name: "an F-16 radar antenna",
+    fact: "Mechanically scanned in the -68 model, electronically in the -83. Sees targets 100 miles away while fitting inside a nosecone.",
+    emoji: "\u{1F4E1}",
   },
 
   // ===== MEDIUM (350-800 lbs) =====
@@ -208,6 +258,12 @@ const AVIATION_FACTS: AviationFact[] = [
     name: "a Mark 82 general-purpose bomb",
     fact: "The most dropped bomb in US military history. Simple, unguided, devastating. First used in Vietnam, still in service.",
     emoji: "\u{1F4A3}",
+  },
+  {
+    weightLbs: 475,
+    name: "a Gemini spacecraft hatch",
+    fact: "Explosive bolts blew it off for EVA. Ed White didn't want to come back in from the first American spacewalk.",
+    emoji: "\u{1F468}\u{200D}\u{1F680}",
   },
   {
     weightLbs: 530,
@@ -649,6 +705,20 @@ export interface AviationComparison {
  * Given total mass moved in lbs, find the most interesting aviation comparison.
  * Picks from all viable matches randomly so you get a different fact each time.
  */
+/**
+ * Simple string hash that returns a number 0-1 (deterministic pseudo-random).
+ * Uses the same seed string to always produce the same result.
+ */
+function seededRandom(seed: string): number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    const ch = seed.charCodeAt(i);
+    hash = ((hash << 5) - hash + ch) | 0;
+  }
+  // Convert to 0-1 range
+  return Math.abs(hash % 10000) / 10000;
+}
+
 export function getAviationComparison(massMovedLbs: number): AviationComparison | null {
   if (massMovedLbs <= 0) return null;
 
@@ -699,10 +769,15 @@ export function getAviationComparison(massMovedLbs: number): AviationComparison 
     return null;
   }
 
-  // Pick from the best priority tier, randomly
+  // Pick from the best priority tier using date+mass as seed
+  // Same mass on the same day = same fact (stable within a session)
+  // Different day or different mass = different fact
+  const today = new Date().toISOString().split("T")[0];
+  const seed = `${today}-${massMovedLbs}`;
+
   const bestPriority = Math.min(...candidates.map((c) => c.priority));
   const topTier = candidates.filter((c) => c.priority === bestPriority);
-  const pick = topTier[Math.floor(Math.random() * topTier.length)];
+  const pick = topTier[Math.floor(seededRandom(seed) * topTier.length)];
 
   const { fact, displayRatio, type } = pick;
 

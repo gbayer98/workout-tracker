@@ -163,6 +163,28 @@ export async function POST(request: Request) {
   );
 }
 
+export async function DELETE(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await request.json();
+
+  if (!id) {
+    return NextResponse.json({ error: "Movement ID is required" }, { status: 400 });
+  }
+
+  const movement = await prisma.movement.findUnique({ where: { id } });
+  if (!movement || movement.userId !== session.user.id) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  await prisma.movement.delete({ where: { id } });
+
+  return NextResponse.json({ success: true });
+}
+
 function getWeekStart(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();

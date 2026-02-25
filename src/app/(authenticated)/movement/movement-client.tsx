@@ -41,6 +41,7 @@ export default function MovementClient() {
   const [duration, setDuration] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -91,6 +92,29 @@ export default function MovementClient() {
       setError("Network error — check your connection");
     }
     setSaving(false);
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm("Delete this entry?")) return;
+    setDeleting(id);
+    try {
+      const res = await fetch("/api/movement", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        const refreshRes = await fetch("/api/movement");
+        if (refreshRes.ok) {
+          setData(await refreshRes.json());
+        }
+      } else {
+        setError("Failed to delete entry");
+      }
+    } catch {
+      setError("Network error — check your connection");
+    }
+    setDeleting(null);
   }
 
   if (loading) {
@@ -328,17 +352,30 @@ export default function MovementClient() {
                           {m.distance} mi
                         </span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm text-muted">
-                          {formatDate(m.date)}
-                        </p>
-                        {m.duration && (
-                          <p className="text-xs text-muted">
-                            {m.duration} min
-                            {m.distance > 0 &&
-                              ` \u2022 ${(m.duration / m.distance).toFixed(1)} min/mi`}
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-sm text-muted">
+                            {formatDate(m.date)}
                           </p>
-                        )}
+                          {m.duration && (
+                            <p className="text-xs text-muted">
+                              {m.duration} min
+                              {m.distance > 0 &&
+                                ` \u2022 ${(m.duration / m.distance).toFixed(1)} min/mi`}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleDelete(m.id)}
+                          disabled={deleting === m.id}
+                          className="p-1.5 text-muted hover:text-danger transition-colors disabled:opacity-50"
+                          title="Delete"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                          </svg>
+                        </button>
                       </div>
                     </div>
                   ))}

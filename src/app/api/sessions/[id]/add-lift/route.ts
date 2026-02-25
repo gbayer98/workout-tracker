@@ -31,6 +31,10 @@ export async function POST(
     return NextResponse.json({ error: "Session already finished" }, { status: 400 });
   }
 
+  if (!workoutSession.workout || !workoutSession.workoutId) {
+    return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+  }
+
   // Check if lift is already in the workout
   const alreadyInWorkout = workoutSession.workout.workoutLifts.some(
     (wl) => wl.liftId === liftId

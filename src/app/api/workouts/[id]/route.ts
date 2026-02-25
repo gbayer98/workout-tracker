@@ -78,29 +78,32 @@ export async function DELETE(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Check for sessions referencing this workout
-  const sessionCount = await prisma.session.count({
-    where: { workoutId: id },
-  });
-
-  if (sessionCount > 0) {
-    // Delete associated session data first, then the workout
-    await prisma.$transaction(async (tx) => {
-      // Delete session sets for all sessions of this workout
-      await tx.sessionSet.deleteMany({
-        where: { session: { workoutId: id } },
-      });
-      // Delete sessions
-      await tx.session.deleteMany({
-        where: { workoutId: id },
-      });
-      // Delete workout lifts and workout
-      await tx.workoutLift.deleteMany({ where: { workoutId: id } });
-      await tx.workout.delete({ where: { id } });
+  // Preserve session history: stamp workout name on sessions, then null out the FK
+  await prisma.$transaction(async (tx) => {
+    // Save workout name on finished sessions so history is preserved
+    await tx.session.updateMany({
+      where: { workoutId: id, finishedAt: { not: null } },
+      data: { workoutName: workout.name, workoutId: null },
     });
-  } else {
-    await prisma.workout.delete({ where: { id } });
-  }
+
+    // Delete any unfinished sessions (incomplete = no history to preserve)
+    const unfinished = await tx.session.findMany({
+      where: { workoutId: id, finishedAt: null },
+      select: { id: true },
+    });
+    if (unfinished.length > 0) {
+      await tx.sessionSet.deleteMany({
+        where: { sessionId: { in: unfinished.map((s) => s.id) } },
+      });
+      await tx.session.deleteMany({
+        where: { id: { in: unfinished.map((s) => s.id) } },
+      });
+    }
+
+    // Delete workout lifts and workout
+    await tx.workoutLift.deleteMany({ where: { workoutId: id } });
+    await tx.workout.delete({ where: { id } });
+  });
 
   return NextResponse.json({ success: true });
 }
