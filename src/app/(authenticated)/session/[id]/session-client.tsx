@@ -10,6 +10,7 @@ interface Lift {
   name: string;
   muscleGroup: string;
   type: "STRENGTH" | "BODYWEIGHT" | "ENDURANCE";
+  perSide: boolean;
 }
 
 interface WorkoutLift {
@@ -257,25 +258,57 @@ export default function SessionClient({
 
   // Auto-save sets to server (fire-and-forget)
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const setsRef = useRef(sets);
+  setsRef.current = sets;
+
+  function collectSets(currentSets: Record<string, SetEntry[]>): SetEntry[] {
+    const allSets: SetEntry[] = [];
+    for (const liftSets of Object.values(currentSets)) {
+      for (const set of liftSets) {
+        if (set.weight > 0 || set.reps > 0 || (set.duration || 0) > 0) {
+          allSets.push(set);
+        }
+      }
+    }
+    return allSets;
+  }
+
+  function saveSetsNow(currentSets: Record<string, SetEntry[]>) {
+    const allSets = collectSets(currentSets);
+    fetch(`/api/sessions/${session.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sets: allSets, finish: false }),
+    }).catch(() => {});
+  }
 
   function autoSaveSets(currentSets: Record<string, SetEntry[]>) {
     if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
-    autoSaveRef.current = setTimeout(() => {
-      const allSets: SetEntry[] = [];
-      for (const liftSets of Object.values(currentSets)) {
-        for (const set of liftSets) {
-          if (set.weight > 0 || set.reps > 0 || (set.duration || 0) > 0) {
-            allSets.push(set);
-          }
-        }
-      }
+    autoSaveRef.current = setTimeout(() => saveSetsNow(currentSets), 2000);
+  }
+
+  // Periodic auto-save every 30s + save on beforeunload to prevent data loss
+  useEffect(() => {
+    const interval = setInterval(() => {
+      saveSetsNow(setsRef.current);
+    }, 30000);
+
+    const handleBeforeUnload = () => {
+      const allSets = collectSets(setsRef.current);
       fetch(`/api/sessions/${session.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sets: allSets, finish: false }),
+        keepalive: true,
       }).catch(() => {});
-    }, 2000);
-  }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [session.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Called on blur — only triggers on first completion to avoid phantom timers
   function handleSetBlur(liftId: string, setIndex: number) {
@@ -601,6 +634,9 @@ export default function SessionClient({
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold">{wl.lift.name}</h3>
+                    {wl.lift.perSide && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">per side</span>
+                    )}
                     {liftType !== "STRENGTH" && (
                       <span className={`text-xs px-1.5 py-0.5 rounded ${
                         liftType === "BODYWEIGHT" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"

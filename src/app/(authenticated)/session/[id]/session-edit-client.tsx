@@ -8,6 +8,7 @@ interface Lift {
   name: string;
   muscleGroup: string;
   type: "STRENGTH" | "BODYWEIGHT" | "ENDURANCE";
+  perSide: boolean;
 }
 
 interface WorkoutLift {
@@ -194,6 +195,9 @@ export default function SessionEditClient({
             >
               <div className="flex items-center gap-2 mb-2">
                 <h3 className="font-semibold">{wl.lift.name}</h3>
+                {wl.lift.perSide && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">per side</span>
+                )}
                 {liftType !== "STRENGTH" && (
                   <span className={`text-xs px-1.5 py-0.5 rounded ${
                     liftType === "BODYWEIGHT" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"

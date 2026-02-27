@@ -131,7 +131,7 @@ export async function GET() {
             userId: { in: visibleUserIds },
           },
         },
-        include: { session: { include: { user: true } } },
+        include: { session: { include: { user: true } }, lift: true },
       });
 
       const movements = await prisma.movement.findMany({
@@ -153,7 +153,8 @@ export async function GET() {
             score: 0,
           };
         }
-        userScores[uid].score += Number(s.weight) * s.reps;
+        const multiplier = s.lift.perSide ? 2 : 1;
+        userScores[uid].score += Number(s.weight) * multiplier * s.reps;
       }
 
       for (const m of movements) {

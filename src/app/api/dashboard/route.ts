@@ -30,7 +30,7 @@ export async function GET() {
     },
     include: {
       workout: true,
-      sessionSets: true,
+      sessionSets: { include: { lift: true } },
     },
     orderBy: { startedAt: "desc" },
   });
@@ -109,7 +109,8 @@ export async function GET() {
   for (const s of recentSessions) {
     totalSets += s.sessionSets.length;
     for (const set of s.sessionSets) {
-      totalVolume += Number(set.weight) * set.reps;
+      const multiplier = set.lift.perSide ? 2 : 1;
+      totalVolume += Number(set.weight) * multiplier * set.reps;
     }
   }
 
@@ -119,7 +120,8 @@ export async function GET() {
   for (const s of prevWeekSessions) {
     prevSets += s.sessionSets.length;
     for (const set of s.sessionSets) {
-      prevVolume += Number(set.weight) * set.reps;
+      const multiplier = set.lift.perSide ? 2 : 1;
+      prevVolume += Number(set.weight) * multiplier * set.reps;
     }
   }
 

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { name, muscleGroup, type } = body;
+  const { name, muscleGroup, type, perSide } = body;
 
   const trimmedName = name?.trim();
   const trimmedGroup = muscleGroup?.trim();
@@ -60,6 +60,7 @@ export async function POST(request: Request) {
       name: trimmedName,
       muscleGroup: trimmedGroup,
       type: liftType,
+      perSide: liftType === "STRENGTH" ? !!perSide : false,
       isGlobal: false,
       userId: session.user.id,
     },

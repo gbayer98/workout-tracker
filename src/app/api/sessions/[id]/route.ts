@@ -178,7 +178,10 @@ export async function PUT(
       const totalSets = finishedSession.sessionSets.length;
 
       const massMoved = finishedSession.sessionSets.reduce((sum, s) => {
-        if (s.lift.type === "STRENGTH") return sum + Number(s.weight) * s.reps;
+        if (s.lift.type === "STRENGTH") {
+          const multiplier = s.lift.perSide ? 2 : 1;
+          return sum + Number(s.weight) * multiplier * s.reps;
+        }
         return sum;
       }, 0);
 

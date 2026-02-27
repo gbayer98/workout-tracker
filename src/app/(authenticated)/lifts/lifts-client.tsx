@@ -10,6 +10,7 @@ interface Lift {
   name: string;
   muscleGroup: string;
   type: "STRENGTH" | "BODYWEIGHT" | "ENDURANCE";
+  perSide: boolean;
   isGlobal: boolean;
   userId: string | null;
 }
@@ -29,6 +30,7 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
   const [newName, setNewName] = useState("");
   const [newGroup, setNewGroup] = useState("Chest");
   const [newType, setNewType] = useState<"STRENGTH" | "BODYWEIGHT" | "ENDURANCE">("STRENGTH");
+  const [newPerSide, setNewPerSide] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedLiftId, setSelectedLiftId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +106,7 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
       const res = await fetch("/api/lifts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), muscleGroup: newGroup, type: newType }),
+        body: JSON.stringify({ name: newName.trim(), muscleGroup: newGroup, type: newType, perSide: newType === "STRENGTH" ? newPerSide : false }),
       });
 
       if (res.ok) {
@@ -219,6 +221,20 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
               </button>
             ))}
           </div>
+          {newType === "STRENGTH" && (
+            <label className="flex items-center gap-3 px-3 py-2 rounded-lg bg-input-bg border border-input-border cursor-pointer">
+              <input
+                type="checkbox"
+                checked={newPerSide}
+                onChange={(e) => setNewPerSide(e.target.checked)}
+                className="w-4 h-4 accent-primary"
+              />
+              <div>
+                <span className="text-sm font-medium">Per side</span>
+                <span className="text-xs text-muted ml-2">Weight entered is per hand/leg (e.g., 20lb dumbbells = 40lb total)</span>
+              </div>
+            </label>
+          )}
           <div className="flex gap-2">
             <button
               type="submit"
@@ -267,6 +283,9 @@ export default function LiftsClient({ initialLifts }: { initialLifts: Lift[] }) 
                   }`}
                 >
                   <span className="font-medium">{lift.name}</span>
+                  {lift.perSide && (
+                    <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400">per side</span>
+                  )}
                   {lift.type !== "STRENGTH" && (
                     <span className={`ml-2 text-xs px-1.5 py-0.5 rounded ${
                       lift.type === "BODYWEIGHT" ? "bg-success/15 text-success" : "bg-primary/15 text-primary"

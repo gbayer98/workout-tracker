@@ -22,12 +22,33 @@ interface Workout {
   workoutLifts: WorkoutLift[];
 }
 
+interface ActiveSession {
+  id: string;
+  workoutId: string | null;
+  workoutName: string;
+  startedAt: string;
+  setCount: number;
+}
+
+interface HistorySession {
+  id: string;
+  workoutId: string | null;
+  workoutName: string;
+  startedAt: string;
+  finishedAt: string;
+  setCount: number;
+}
+
 export default function WorkoutsClient({
   initialWorkouts,
   availableLifts,
+  activeSession,
+  sessionHistory,
 }: {
   initialWorkouts: Workout[];
   availableLifts: Lift[];
+  activeSession: ActiveSession | null;
+  sessionHistory: HistorySession[];
 }) {
   const [workouts, setWorkouts] = useState(initialWorkouts);
   const [showForm, setShowForm] = useState(false);
@@ -41,7 +62,9 @@ export default function WorkoutsClient({
   const [newLiftName, setNewLiftName] = useState("");
   const [newLiftMuscleGroup, setNewLiftMuscleGroup] = useState("Arms");
   const [newLiftType, setNewLiftType] = useState<"STRENGTH" | "BODYWEIGHT" | "ENDURANCE">("STRENGTH");
+  const [newLiftPerSide, setNewLiftPerSide] = useState(false);
   const [creatingLift, setCreatingLift] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const router = useRouter();
 
   function openCreate() {
@@ -49,6 +72,7 @@ export default function WorkoutsClient({
     setFormName("");
     setSelectedLiftIds([]);
     setShowForm(true);
+    setShowTemplates(true);
   }
 
   function openEdit(workout: Workout) {
@@ -56,6 +80,7 @@ export default function WorkoutsClient({
     setFormName(workout.name);
     setSelectedLiftIds(workout.workoutLifts.map((wl) => wl.liftId));
     setShowForm(true);
+    setShowTemplates(true);
   }
 
   function toggleLift(liftId: string) {
@@ -117,6 +142,10 @@ export default function WorkoutsClient({
   }
 
   async function handleStart(workoutId: string) {
+    if (activeSession) {
+      router.push(`/session/${activeSession.id}`);
+      return;
+    }
     const res = await fetch("/api/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -145,6 +174,7 @@ export default function WorkoutsClient({
           name: newLiftName.trim(),
           muscleGroup: newLiftMuscleGroup,
           type: newLiftType,
+          perSide: newLiftType === "STRENGTH" ? newLiftPerSide : false,
         }),
       });
       if (res.ok) {
@@ -164,9 +194,38 @@ export default function WorkoutsClient({
     setCreatingLift(false);
   }
 
+  function formatDuration(start: string, end: string): string {
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    const mins = Math.round(ms / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return `${hrs}h ${rem}m`;
+  }
+
+  function formatDate(dateStr: string): string {
+    const d = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  function formatElapsed(start: string): string {
+    const ms = Date.now() - new Date(start).getTime();
+    const mins = Math.floor(ms / 60000);
+    if (mins < 1) return "just started";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    return `${hrs}h ${mins % 60}m ago`;
+  }
+
   const MUSCLE_GROUPS = ["Arms", "Back", "Chest", "Core", "Legs", "Shoulders"];
 
-  // Group available lifts by muscle group for the form
   const liftsByGroup = allLifts.reduce<Record<string, Lift[]>>((acc, lift) => {
     if (!acc[lift.muscleGroup]) acc[lift.muscleGroup] = [];
     acc[lift.muscleGroup].push(lift);
@@ -181,16 +240,50 @@ export default function WorkoutsClient({
         </div>
       )}
 
+      {/* Active Session Banner */}
+      {activeSession && (
+        <button
+          onClick={() => router.push(`/session/${activeSession.id}`)}
+          className="w-full mb-4 p-4 bg-success/15 border-2 border-success/40 rounded-xl text-left transition-colors hover:bg-success/20"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="w-2.5 h-2.5 bg-success rounded-full animate-pulse" />
+                <span className="text-sm font-semibold text-success uppercase tracking-wide">Active Session</span>
+              </div>
+              <p className="font-bold text-lg">{activeSession.workoutName}</p>
+              <p className="text-sm text-muted">
+                Started {formatElapsed(activeSession.startedAt)} &middot; {activeSession.setCount} sets logged
+              </p>
+            </div>
+            <div className="text-success font-semibold text-sm bg-success/20 px-3 py-1.5 rounded-lg">
+              Resume &rarr;
+            </div>
+          </div>
+        </button>
+      )}
+
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold">Workouts</h2>
-        <button
-          onClick={openCreate}
-          className="px-3 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors"
-        >
-          + New Workout
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowTemplates(!showTemplates)}
+            className="px-3 py-2 text-sm text-muted hover:text-foreground border border-card-border rounded-lg transition-colors"
+          >
+            {showTemplates ? "Hide Templates" : "Templates"}
+          </button>
+          <button
+            onClick={openCreate}
+            className="px-3 py-2 bg-primary text-white text-sm font-medium rounded-lg hover:bg-primary-hover transition-colors"
+          >
+            + New
+          </button>
+        </div>
       </div>
 
+      {/* Create/Edit Form */}
       {showForm && (
         <form
           onSubmit={handleSave}
@@ -319,6 +412,17 @@ export default function WorkoutsClient({
                   <option value="ENDURANCE">Endurance</option>
                 </select>
               </div>
+              {newLiftType === "STRENGTH" && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newLiftPerSide}
+                    onChange={(e) => setNewLiftPerSide(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-primary"
+                  />
+                  <span className="text-xs text-muted">Per side (dumbbell/unilateral)</span>
+                </label>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -361,54 +465,103 @@ export default function WorkoutsClient({
         </form>
       )}
 
-      {workouts.length === 0 && !showForm && (
-        <div className="text-center py-12">
-          <p className="text-muted mb-2">No workouts yet</p>
-          <p className="text-sm text-muted">
-            Create a workout by selecting lifts you want to group together.
-          </p>
+      {/* Workout Templates (collapsible) */}
+      {showTemplates && !showForm && (
+        <div className="mb-6 space-y-3">
+          {workouts.length === 0 ? (
+            <div className="text-center py-6">
+              <p className="text-muted text-sm">No workout templates yet. Create one to get started.</p>
+            </div>
+          ) : (
+            workouts.map((workout) => {
+              const isActive = activeSession?.workoutId === workout.id;
+              return (
+                <div
+                  key={workout.id}
+                  className="p-4 bg-card rounded-lg border border-card-border"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-lg">{workout.name}</h3>
+                    <span className="text-sm text-muted">
+                      {workout.workoutLifts.length} lifts
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-muted mb-3">
+                    {workout.workoutLifts.map((wl) => wl.lift.name).join(", ")}
+                  </p>
+
+                  <div className="flex gap-2">
+                    {isActive ? (
+                      <button
+                        onClick={() => router.push(`/session/${activeSession.id}`)}
+                        className="flex-1 py-2 bg-success text-white font-medium rounded-lg hover:opacity-90 transition-opacity"
+                      >
+                        Resume Workout
+                      </button>
+                    ) : activeSession ? (
+                      <button
+                        disabled
+                        className="flex-1 py-2 bg-card text-muted font-medium rounded-lg border border-card-border opacity-50 cursor-not-allowed"
+                      >
+                        Session In Progress...
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleStart(workout.id)}
+                        className="flex-1 py-2 bg-success text-white font-medium rounded-lg hover:opacity-90 transition-opacity"
+                      >
+                        Start Workout
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openEdit(workout)}
+                      className="px-3 py-2 text-sm text-muted hover:text-foreground border border-card-border rounded-lg transition-colors"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(workout.id)}
+                      className="px-3 py-2 text-sm text-danger hover:text-danger-hover border border-card-border rounded-lg transition-colors"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       )}
 
-      <div className="space-y-3">
-        {workouts.map((workout) => (
-          <div
-            key={workout.id}
-            className="p-4 bg-card rounded-lg border border-card-border"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold text-lg">{workout.name}</h3>
-              <span className="text-sm text-muted">
-                {workout.workoutLifts.length} lifts
-              </span>
-            </div>
-
-            <p className="text-sm text-muted mb-3">
-              {workout.workoutLifts.map((wl) => wl.lift.name).join(", ")}
-            </p>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleStart(workout.id)}
-                className="flex-1 py-2 bg-success text-white font-medium rounded-lg hover:opacity-90 transition-opacity"
-              >
-                Start Workout
-              </button>
-              <button
-                onClick={() => openEdit(workout)}
-                className="px-3 py-2 text-sm text-muted hover:text-foreground border border-card-border rounded-lg transition-colors"
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => handleDelete(workout.id)}
-                className="px-3 py-2 text-sm text-danger hover:text-danger-hover border border-card-border rounded-lg transition-colors"
-              >
-                Delete
-              </button>
-            </div>
+      {/* Session History */}
+      <div>
+        <h3 className="text-lg font-semibold mb-3">Session History</h3>
+        {sessionHistory.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-muted text-sm">No completed sessions yet. Start a workout to begin tracking.</p>
           </div>
-        ))}
+        ) : (
+          <div className="space-y-2">
+            {sessionHistory.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => router.push(`/session/${s.id}`)}
+                className="w-full p-3 bg-card rounded-lg border border-card-border text-left hover:border-primary/30 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{s.workoutName}</p>
+                    <p className="text-sm text-muted">
+                      {formatDate(s.finishedAt)} &middot; {formatDuration(s.startedAt, s.finishedAt)} &middot; {s.setCount} sets
+                    </p>
+                  </div>
+                  <span className="text-muted text-sm">&rarr;</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
