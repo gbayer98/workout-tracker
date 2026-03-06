@@ -119,7 +119,7 @@ export default function LiftHistoryChart({
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Line
-                type="monotone"
+                type="linear"
                 dataKey="duration"
                 stroke="#10b981"
                 strokeWidth={2}
@@ -172,7 +172,7 @@ export default function LiftHistoryChart({
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Line
-                type="monotone"
+                type="linear"
                 dataKey="reps"
                 stroke="#ef4444"
                 strokeWidth={2}
@@ -206,9 +206,11 @@ export default function LiftHistoryChart({
               stroke="#3b82f6"
               tick={{ fontSize: 11 }}
               domain={[
-                (dataMin: number) => Math.max(0, Math.floor(dataMin - 5)),
-                (dataMax: number) => Math.ceil(dataMax + 5),
+                (dataMin: number) => Math.max(0, Math.floor(dataMin / 5) * 5 - 5),
+                (dataMax: number) => Math.ceil(dataMax / 5) * 5 + 5,
               ]}
+              tickCount={5}
+              allowDecimals={false}
               label={{
                 value: "Weight (lbs)",
                 angle: -90,
@@ -222,9 +224,11 @@ export default function LiftHistoryChart({
               stroke="#ef4444"
               tick={{ fontSize: 11 }}
               domain={[
-                (dataMin: number) => Math.max(0, dataMin - 2),
-                (dataMax: number) => dataMax + 2,
+                (dataMin: number) => Math.max(0, Math.floor(dataMin / 2) * 2 - 2),
+                (dataMax: number) => Math.ceil(dataMax / 2) * 2 + 2,
               ]}
+              tickCount={5}
+              allowDecimals={false}
               label={{
                 value: "Reps",
                 angle: 90,
@@ -255,7 +259,7 @@ export default function LiftHistoryChart({
             />
             <Line
               yAxisId="reps"
-              type="monotone"
+              type="linear"
               dataKey="reps"
               stroke="#ef4444"
               strokeWidth={2}
