@@ -78,6 +78,17 @@ export default function LiftHistoryChart({
     return `${seconds}s`;
   };
 
+  function makeTicks(values: number[], step: number): number[] {
+    if (values.length === 0) return [0, step, step * 2];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const low = Math.max(0, Math.floor(min / step) * step - step);
+    const high = Math.ceil(max / step) * step + step;
+    const ticks: number[] = [];
+    for (let v = low; v <= high; v += step) ticks.push(v);
+    return ticks;
+  }
+
   if (liftType === "ENDURANCE") {
     return (
       <div className="p-4 bg-card rounded-lg border border-card-border">
@@ -134,6 +145,8 @@ export default function LiftHistoryChart({
   }
 
   if (liftType === "BODYWEIGHT") {
+    const bwReps = data.map((d) => d.reps ?? 0).filter((r) => r > 0);
+    const bwTicks = makeTicks(bwReps, 2);
     return (
       <div className="p-4 bg-card rounded-lg border border-card-border">
         <p className="text-sm font-medium mb-3">{liftName} History</p>
@@ -150,10 +163,9 @@ export default function LiftHistoryChart({
               <YAxis
                 stroke="#ef4444"
                 tick={{ fontSize: 11 }}
-                domain={[
-                  (dataMin: number) => Math.max(0, dataMin - 2),
-                  (dataMax: number) => dataMax + 2,
-                ]}
+                domain={[bwTicks[0], bwTicks[bwTicks.length - 1]]}
+                ticks={bwTicks}
+                allowDecimals={false}
                 label={{
                   value: "Reps",
                   angle: -90,
@@ -186,6 +198,12 @@ export default function LiftHistoryChart({
     );
   }
 
+  // Compute clean tick arrays for strength charts
+  const weights = data.map((d) => d.weight ?? 0).filter((w) => w > 0);
+  const repsValues = data.map((d) => d.reps ?? 0).filter((r) => r > 0);
+  const weightTicks = makeTicks(weights, 5);
+  const repsTicks = makeTicks(repsValues, 2);
+
   // STRENGTH: dual-axis weight + reps (default)
   return (
     <div className="p-4 bg-card rounded-lg border border-card-border">
@@ -205,11 +223,8 @@ export default function LiftHistoryChart({
               orientation="left"
               stroke="#3b82f6"
               tick={{ fontSize: 11 }}
-              domain={[
-                (dataMin: number) => Math.max(0, Math.floor(dataMin / 5) * 5 - 5),
-                (dataMax: number) => Math.ceil(dataMax / 5) * 5 + 5,
-              ]}
-              tickCount={5}
+              domain={[weightTicks[0], weightTicks[weightTicks.length - 1]]}
+              ticks={weightTicks}
               allowDecimals={false}
               label={{
                 value: "Weight (lbs)",
@@ -223,11 +238,8 @@ export default function LiftHistoryChart({
               orientation="right"
               stroke="#ef4444"
               tick={{ fontSize: 11 }}
-              domain={[
-                (dataMin: number) => Math.max(0, Math.floor(dataMin / 2) * 2 - 2),
-                (dataMax: number) => Math.ceil(dataMax / 2) * 2 + 2,
-              ]}
-              tickCount={5}
+              domain={[repsTicks[0], repsTicks[repsTicks.length - 1]]}
+              ticks={repsTicks}
               allowDecimals={false}
               label={{
                 value: "Reps",
