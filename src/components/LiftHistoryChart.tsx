@@ -246,7 +246,7 @@ export default function LiftHistoryChart({
             />
             <Line
               yAxisId="weight"
-              type="stepAfter"
+              type="linear"
               dataKey="weight"
               stroke="#3b82f6"
               strokeWidth={2}

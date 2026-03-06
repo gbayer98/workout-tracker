@@ -544,21 +544,42 @@ export default function WorkoutsClient({
         ) : (
           <div className="space-y-2">
             {sessionHistory.map((s) => (
-              <button
+              <div
                 key={s.id}
-                onClick={() => router.push(`/session/${s.id}`)}
-                className="w-full p-3 bg-card rounded-lg border border-card-border text-left hover:border-primary/30 transition-colors"
+                className="p-3 bg-card rounded-lg border border-card-border"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-2">
                   <div>
                     <p className="font-medium">{s.workoutName}</p>
                     <p className="text-sm text-muted">
                       {formatDate(s.finishedAt)} &middot; {formatDuration(s.startedAt, s.finishedAt)} &middot; {s.setCount} sets
                     </p>
                   </div>
-                  <span className="text-muted text-sm">&rarr;</span>
                 </div>
-              </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => router.push(`/session/${s.id}`)}
+                    className="flex-1 py-1.5 text-sm text-muted hover:text-foreground border border-card-border rounded-lg transition-colors"
+                  >
+                    Edit
+                  </button>
+                  {s.workoutId && !activeSession ? (
+                    <button
+                      onClick={() => handleStart(s.workoutId!)}
+                      className="flex-1 py-1.5 text-sm bg-success text-white font-medium rounded-lg hover:opacity-90 transition-opacity"
+                    >
+                      Repeat
+                    </button>
+                  ) : s.workoutId && activeSession ? (
+                    <button
+                      disabled
+                      className="flex-1 py-1.5 text-sm text-muted border border-card-border rounded-lg opacity-50 cursor-not-allowed"
+                    >
+                      Session Active
+                    </button>
+                  ) : null}
+                </div>
+              </div>
             ))}
           </div>
         )}
